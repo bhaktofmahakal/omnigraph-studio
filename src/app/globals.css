@@ -2,24 +2,26 @@
 @import "@xyflow/react/dist/style.css";
 
 :root {
-  --background: #08090d;
+  --background: #0a0a0c;
   --foreground: #f4f4f6;
-  --surface-1: #0e1017;
-  --surface-2: #141722;
-  --surface-3: #1a1e2d;
-  --hairline: #222638;
+  --muted: #9494a0;
+  --surface-1: #121216;
+  --surface-2: #1a1a22;
+  --surface-3: #22222e;
+  --hairline: rgba(255, 255, 255, 0.08);
+  --hairline-border: #222638;
   --hairline-strong: #333852;
+  --accent-cyan: #06b6d4;
+  --accent-emerald: #10b981;
+  --accent-ruby: #f43f5e;
+  --accent-amber: #f59e0b;
   --accent-iris: #5e6ad2;
-  --accent-cyan: #38bdf8;
-  --accent-emerald: #34d399;
-  --accent-amber: #fbbf24;
-  --accent-rose: #f43f5e;
 }
 
 body {
   background-color: var(--background);
   color: var(--foreground);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-family: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   overflow-x: hidden;
   user-select: none;
 }
