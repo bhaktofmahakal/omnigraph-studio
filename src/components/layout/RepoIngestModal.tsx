@@ -65,8 +65,6 @@ export const RepoIngestModal: React.FC = () => {
   const [progressMessage, setProgressMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
 
-  if (!isIngestModalOpen) return null;
-
   // Filter scanned files by search query
   const filteredFiles = useMemo(() => {
     if (!fileSearchQuery.trim()) return scannedFiles;
@@ -282,6 +280,8 @@ export const RepoIngestModal: React.FC = () => {
       setIsProcessing(false);
     }
   };
+
+  if (!isIngestModalOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-md animate-in fade-in">
