@@ -1,8 +1,38 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Radio, Play, Pause, RotateCcw } from 'lucide-react';
+import { Radio, Play, Pause, RotateCcw, Zap, Send, ChevronRight } from 'lucide-react';
 import { useOmniStore } from '@/lib/store/useOmniStore';
+import { AgentRoleId } from '@/lib/types';
+
+const AGENT_DETAILS: Record<string, { color: string; model: string; systemPrompt: string }> = {
+  architect: {
+    color: '#58a6ff',
+    model: 'openai/gpt-4o',
+    systemPrompt: 'You are a senior software architect. Analyze the codebase structure, identify coupling issues, and propose modular refactoring strategies.',
+  },
+  codewriter: {
+    color: '#3fb950',
+    model: 'openai/gpt-4o-mini',
+    systemPrompt: 'You are a precise code generation agent. Write clean, tested, production-quality code patches based on architectural directives.',
+  },
+  testrunner: {
+    color: '#d29922',
+    model: 'deepseek/deepseek-chat',
+    systemPrompt: 'You are a QA testing agent. Execute test suites, identify failing assertions, and validate patches against regression benchmarks.',
+  },
+  security: {
+    color: '#f85149',
+    model: 'google/gemini-2.5-flash',
+    systemPrompt: 'You are a security auditor. Scan for vulnerabilities, injection risks, and compliance violations in proposed code changes.',
+  },
+};
+
+const PRESET_PROMPTS = [
+  { label: 'Fix Failing Tests', prompt: 'Identify and fix all failing test assertions in the current scenario' },
+  { label: 'Refactor JWT Auth', prompt: 'Refactor the JWT authentication module for better security and testability' },
+  { label: 'Security Audit', prompt: 'Run a comprehensive security audit on all authentication-related modules' },
+];
 
 export const PSMASRadar: React.FC = () => {
   const [angle, setAngle] = useState<number>(1.274);
@@ -11,26 +41,52 @@ export const PSMASRadar: React.FC = () => {
   const pausePSMASSweep = useOmniStore(state => state.pausePSMASSweep);
   const resetPSMASSweep = useOmniStore(state => state.resetPSMASSweep);
   const activeAgentId = useOmniStore(state => state.activeAgentId);
+  const playbackSpeed = useOmniStore(state => state.playbackSpeed);
+  const setPlaybackSpeed = useOmniStore(state => state.setPlaybackSpeed);
+  const agents = useOmniStore(state => state.agents);
+
+  const [selectedAgent, setSelectedAgent] = useState<AgentRoleId | null>(null);
+  const [customPrompt, setCustomPrompt] = useState('');
 
   // Rotational sweep animation
   useEffect(() => {
     let interval: NodeJS.Timeout | null = null;
     if (isAgentRunning) {
       interval = setInterval(() => {
-        setAngle(prev => (prev + 0.04) % (2 * Math.PI));
+        setAngle(prev => (prev + 0.04 * playbackSpeed) % (2 * Math.PI));
       }, 40);
     }
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [isAgentRunning]);
+  }, [isAgentRunning, playbackSpeed]);
 
-  const size = 240;
+  const size = 220;
   const center = size / 2;
-  const radius = 88;
+  const radius = 82;
 
   const needleX = center + radius * Math.cos(angle - Math.PI / 2);
   const needleY = center + radius * Math.sin(angle - Math.PI / 2);
+
+  const handleAgentClick = (agentId: AgentRoleId) => {
+    setSelectedAgent(selectedAgent === agentId ? null : agentId);
+  };
+
+  const handlePresetClick = (prompt: string) => {
+    setCustomPrompt(prompt);
+  };
+
+  const handleSubmitPrompt = () => {
+    if (!customPrompt.trim()) return;
+    // Start the sweep (the custom prompt is logged but the sweep uses predefined steps)
+    startPSMASSweep();
+    setCustomPrompt('');
+  };
+
+  const agentDetail = selectedAgent ? AGENT_DETAILS[selectedAgent] : null;
+  const selectedAgentState = selectedAgent ? agents.find(a => a.id === selectedAgent) : null;
+
+  const SPEEDS = [0.5, 1, 2, 5];
 
   return (
     <div className="flex flex-col h-full bg-[#161b22] text-[#e6edf3] font-sans overflow-hidden select-none">
@@ -43,8 +99,25 @@ export const PSMASRadar: React.FC = () => {
           </h2>
         </div>
 
-        {/* Live Sweep Control Button */}
+        {/* Controls */}
         <div className="flex items-center gap-2">
+          {/* Speed Control */}
+          <div className="flex items-center gap-0.5 bg-[#0d1117] p-0.5 rounded-lg border border-[#30363d]">
+            {SPEEDS.map(s => (
+              <button
+                key={s}
+                onClick={() => setPlaybackSpeed(s)}
+                className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold transition-all ${
+                  playbackSpeed === s
+                    ? 'bg-[#30363d] text-[#58a6ff]'
+                    : 'text-[#6e7681] hover:text-[#e6edf3]'
+                }`}
+              >
+                {s}×
+              </button>
+            ))}
+          </div>
+
           <button
             onClick={isAgentRunning ? pausePSMASSweep : startPSMASSweep}
             className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-mono font-bold transition-all ${
@@ -76,8 +149,8 @@ export const PSMASRadar: React.FC = () => {
         </div>
       </div>
 
-      {/* ── Main Radar + State Vector Grid ── */}
-      <div className="flex-1 grid grid-cols-12 items-center p-3 gap-2 overflow-hidden">
+      {/* ── Main Radar + Info Grid ── */}
+      <div className="flex-1 grid grid-cols-12 items-stretch p-3 gap-2 overflow-hidden">
 
         {/* ── Left Column: Circular Manifold (7 cols) ── */}
         <div className="col-span-7 relative flex items-center justify-center">
@@ -107,93 +180,161 @@ export const PSMASRadar: React.FC = () => {
             <circle cx={center} cy={center} r="5" fill="#58a6ff" className="shadow-lg" />
             <circle cx={center} cy={center} r="10" fill="none" stroke="#58a6ff" strokeWidth="1" opacity="0.4" />
 
-            {/* 1. Architect Node (Top: θ₁ = 0) */}
-            <g transform={`translate(${center}, ${center - radius})`}>
-              <circle r="6" fill="#0d1117" stroke="#58a6ff" strokeWidth="2.5" className={activeAgentId === 'architect' ? 'animate-ping' : ''} />
+            {/* Clickable Agent Nodes */}
+            {/* 1. Architect (Top) */}
+            <g
+              transform={`translate(${center}, ${center - radius})`}
+              onClick={() => handleAgentClick('architect')}
+              className="cursor-pointer"
+            >
+              <circle r={selectedAgent === 'architect' ? 10 : 6} fill="#0d1117" stroke="#58a6ff" strokeWidth="2.5" className={`transition-all ${activeAgentId === 'architect' ? 'animate-ping' : ''}`} />
               <circle r="2.5" fill="#58a6ff" />
             </g>
 
-            {/* 2. CodeWriter Node (Right: θ₂ = π/2) */}
-            <g transform={`translate(${center + radius}, ${center})`}>
-              <circle r="6" fill="#0d1117" stroke="#3fb950" strokeWidth="2.5" className={activeAgentId === 'codewriter' ? 'animate-ping' : ''} />
+            {/* 2. CodeWriter (Right) */}
+            <g
+              transform={`translate(${center + radius}, ${center})`}
+              onClick={() => handleAgentClick('codewriter')}
+              className="cursor-pointer"
+            >
+              <circle r={selectedAgent === 'codewriter' ? 10 : 6} fill="#0d1117" stroke="#3fb950" strokeWidth="2.5" className={`transition-all ${activeAgentId === 'codewriter' ? 'animate-ping' : ''}`} />
               <circle r="2.5" fill="#3fb950" />
             </g>
 
-            {/* 3. TestRunner Node (Bottom: θ₃ = π) */}
-            <g transform={`translate(${center}, ${center + radius})`}>
-              <circle r="6" fill="#0d1117" stroke="#d29922" strokeWidth="2.5" className={activeAgentId === 'testrunner' ? 'animate-ping' : ''} />
+            {/* 3. TestRunner (Bottom) */}
+            <g
+              transform={`translate(${center}, ${center + radius})`}
+              onClick={() => handleAgentClick('testrunner')}
+              className="cursor-pointer"
+            >
+              <circle r={selectedAgent === 'testrunner' ? 10 : 6} fill="#0d1117" stroke="#d29922" strokeWidth="2.5" className={`transition-all ${activeAgentId === 'testrunner' ? 'animate-ping' : ''}`} />
               <circle r="2.5" fill="#d29922" />
             </g>
 
-            {/* 4. SecurityReviewer Node (Left: θ₄ = 3π/2) */}
-            <g transform={`translate(${center - radius}, ${center})`}>
-              <circle r="6" fill="#0d1117" stroke="#f85149" strokeWidth="2.5" className={activeAgentId === 'security' ? 'animate-ping' : ''} />
+            {/* 4. SecurityReviewer (Left) */}
+            <g
+              transform={`translate(${center - radius}, ${center})`}
+              onClick={() => handleAgentClick('security')}
+              className="cursor-pointer"
+            >
+              <circle r={selectedAgent === 'security' ? 10 : 6} fill="#0d1117" stroke="#f85149" strokeWidth="2.5" className={`transition-all ${activeAgentId === 'security' ? 'animate-ping' : ''}`} />
               <circle r="2.5" fill="#f85149" />
             </g>
           </svg>
 
-          {/* Node Labels */}
-          <div className="absolute top-0 text-center font-mono text-[11px]">
-            <span className="text-[#58a6ff] font-semibold block">Architect</span>
+          {/* Node Labels (clickable) */}
+          <div className="absolute top-0 text-center font-mono text-[11px] cursor-pointer" onClick={() => handleAgentClick('architect')}>
+            <span className={`font-semibold block ${selectedAgent === 'architect' ? 'text-[#58a6ff] text-xs' : 'text-[#58a6ff]'}`}>Architect</span>
             <span className="text-[#8b949e] text-[9px]">&theta;<sub>1</sub> = 0</span>
           </div>
 
-          <div className="absolute right-0 top-1/2 -translate-y-1/2 text-left pl-1 font-mono text-[11px]">
-            <span className="text-[#3fb950] font-semibold block">CodeWriter</span>
+          <div className="absolute right-0 top-1/2 -translate-y-1/2 text-left pl-1 font-mono text-[11px] cursor-pointer" onClick={() => handleAgentClick('codewriter')}>
+            <span className={`font-semibold block ${selectedAgent === 'codewriter' ? 'text-[#3fb950] text-xs' : 'text-[#3fb950]'}`}>CodeWriter</span>
             <span className="text-[#8b949e] text-[9px]">&theta;<sub>2</sub> = &pi;/2</span>
           </div>
 
-          <div className="absolute bottom-0 text-center font-mono text-[11px]">
-            <span className="text-[#d29922] font-semibold block">TestRunner</span>
+          <div className="absolute bottom-0 text-center font-mono text-[11px] cursor-pointer" onClick={() => handleAgentClick('testrunner')}>
+            <span className={`font-semibold block ${selectedAgent === 'testrunner' ? 'text-[#d29922] text-xs' : 'text-[#d29922]'}`}>TestRunner</span>
             <span className="text-[#8b949e] text-[9px]">&theta;<sub>3</sub> = &pi;</span>
           </div>
 
-          <div className="absolute left-0 top-1/2 -translate-y-1/2 text-right pr-1 font-mono text-[11px]">
-            <span className="text-[#f85149] font-semibold block">SecurityReviewer</span>
+          <div className="absolute left-0 top-1/2 -translate-y-1/2 text-right pr-1 font-mono text-[11px] cursor-pointer" onClick={() => handleAgentClick('security')}>
+            <span className={`font-semibold block ${selectedAgent === 'security' ? 'text-[#f85149] text-xs' : 'text-[#f85149]'}`}>SecurityReviewer</span>
             <span className="text-[#8b949e] text-[9px]">&theta;<sub>4</sub> = 3&pi;/2</span>
           </div>
         </div>
 
-        {/* ── Right Column: Broadcast State Vector (5 cols) ── */}
-        <div className="col-span-5 flex flex-col justify-center space-y-2 font-mono text-[11px] pl-1">
-          <div>
-            <span className="text-[#8b949e] font-medium block text-[10px]">
-              Broadcast State Vector
-            </span>
-            <div className="text-xs font-bold text-[#58a6ff] tracking-wider">
-              [ 0.82, 0.14, 0.61, 0.09 ]
+        {/* ── Right Column: Agent Detail / Prompt Input (5 cols) ── */}
+        <div className="col-span-5 flex flex-col justify-between space-y-2 font-mono text-[11px] pl-1 overflow-hidden">
+          {/* Agent Info Panel */}
+          {selectedAgent && agentDetail ? (
+            <div className="p-2.5 rounded-lg bg-[#0d1117] border border-[#30363d] space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: agentDetail.color }} />
+                <span className="font-bold text-xs" style={{ color: agentDetail.color }}>
+                  {selectedAgentState?.name || selectedAgent}
+                </span>
+                <span className={`px-1.5 py-0.5 rounded text-[9px] uppercase border ${
+                  selectedAgentState?.status === 'active'
+                    ? 'bg-[#3fb950]/10 text-[#3fb950] border-[#238636]'
+                    : selectedAgentState?.status === 'completed'
+                    ? 'bg-[#58a6ff]/10 text-[#58a6ff] border-[#58a6ff]/30'
+                    : 'bg-[#21262d] text-[#8b949e] border-[#30363d]'
+                }`}>
+                  {selectedAgentState?.status || 'idle'}
+                </span>
+              </div>
+              <div className="text-[10px] text-[#8b949e]">
+                <span className="text-[#6e7681]">Model:</span> <span className="text-[#e6edf3]">{agentDetail.model}</span>
+              </div>
+              <div className="text-[10px] text-[#6e7681] leading-relaxed">
+                {agentDetail.systemPrompt}
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <div>
+                <span className="text-[#8b949e] font-medium block text-[10px]">
+                  Broadcast State Vector
+                </span>
+                <div className="text-xs font-bold text-[#58a6ff] tracking-wider">
+                  [ {agents.map(a => a.status === 'completed' ? '1.00' : a.status === 'active' ? '0.50' : '0.00').join(', ')} ]
+                </div>
+              </div>
+
+              <div className="space-y-1 text-[#8b949e] text-[10px]">
+                {agents.map(a => (
+                  <div key={a.id} className="flex items-center gap-1.5 cursor-pointer hover:bg-[#21262d] rounded px-1 py-0.5 transition-colors" onClick={() => handleAgentClick(a.id as AgentRoleId)}>
+                    <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: AGENT_DETAILS[a.id]?.color || '#8b949e' }} />
+                    <span className="text-[#e6edf3] font-medium w-20">{a.name}</span>
+                    <span className={`text-[9px] ${a.status === 'completed' ? 'text-[#3fb950]' : a.status === 'active' ? 'text-[#d29922]' : 'text-[#6e7681]'}`}>
+                      {a.status}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Preset Prompt Chips */}
+          <div className="space-y-1.5">
+            <span className="text-[10px] text-[#6e7681] font-medium">Quick Prompts</span>
+            <div className="flex flex-wrap gap-1">
+              {PRESET_PROMPTS.map(p => (
+                <button
+                  key={p.label}
+                  onClick={() => handlePresetClick(p.prompt)}
+                  className="px-2 py-1 rounded-md bg-[#0d1117] border border-[#30363d] hover:border-[#58a6ff] text-[10px] text-[#8b949e] hover:text-[#58a6ff] transition-all"
+                >
+                  {p.label}
+                </button>
+              ))}
             </div>
           </div>
 
-          <div className="space-y-1 text-[#8b949e] text-[10px]">
-            <div className="flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#58a6ff]" />
-              <span className="text-[#e6edf3] font-medium w-20">Architect</span>
-              <span>0.82, 0.14, 0.61</span>
-            </div>
-
-            <div className="flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#3fb950]" />
-              <span className="text-[#e6edf3] font-medium w-20">CodeWriter</span>
-              <span>0.21, 0.91, 0.44</span>
-            </div>
-
-            <div className="flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#d29922]" />
-              <span className="text-[#e6edf3] font-medium w-20">TestRunner</span>
-              <span>0.47, 0.32, 0.88</span>
-            </div>
-
-            <div className="flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#f85149]" />
-              <span className="text-[#e6edf3] font-medium w-20">Security</span>
-              <span>0.11, 0.57, 0.26</span>
-            </div>
+          {/* Prompt Input */}
+          <div className="flex items-center gap-1.5">
+            <input
+              type="text"
+              placeholder="Custom agent directive..."
+              value={customPrompt}
+              onChange={(e) => setCustomPrompt(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleSubmitPrompt()}
+              className="flex-1 bg-[#0d1117] border border-[#30363d] focus:border-[#58a6ff] rounded-lg px-2.5 py-1.5 text-[11px] text-[#e6edf3] placeholder-[#6e7681] focus:outline-none transition-colors"
+            />
+            <button
+              onClick={handleSubmitPrompt}
+              disabled={!customPrompt.trim() || isAgentRunning}
+              className="p-1.5 rounded-lg bg-[#3fb950] hover:bg-[#2ea043] text-[#0d1117] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <Send className="w-3.5 h-3.5" />
+            </button>
           </div>
 
+          {/* Phase Info */}
           <div className="pt-1.5 border-t border-[#30363d] text-[10px]">
             <span className="text-[#8b949e] block">Manifold &phi;(t) &isin; [0, 2&pi;]</span>
-            <span className="text-[#58a6ff] font-bold">&phi; = {angle.toFixed(3)} rad</span>
+            <span className="text-[#58a6ff] font-bold">&phi; = {angle.toFixed(3)} rad · {playbackSpeed}× speed</span>
           </div>
         </div>
 

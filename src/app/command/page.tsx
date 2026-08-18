@@ -1,21 +1,80 @@
 'use client';
 
-import React, { useState } from 'react';
-import { Terminal, Search, Zap, Code, ShieldCheck, Play, ArrowRight } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Terminal, Search, Zap, Code, ShieldCheck, Play, ArrowRight, Network, GitPullRequest, CheckCircle2, LayoutGrid, ExternalLink } from 'lucide-react';
 import { useOmniStore } from '@/lib/store/useOmniStore';
+import { useRouter } from 'next/navigation';
 
 const COMMANDS = [
-  { cmd: '⌘ + K', desc: 'Open Command Palette & AST Search', category: 'Global' },
-  { cmd: 'RUN SWEEP', desc: 'Trigger Phase-Staggered Multi-Agent Execution', category: 'PSMAS' },
-  { cmd: 'ACCEPT HUNK', desc: 'Reconstitute approved AST diff hunk into source code', category: 'Diff' },
-  { cmd: 'DISCLOSE AST', desc: 'Progressively un-fold signature token footprint', category: 'ObjectGraph' },
-  { cmd: 'SAFE BARRIER', desc: 'Enforce human-in-the-loop validation barrier', category: 'Security' },
+  { cmd: 'RUN SWEEP', desc: 'Trigger Phase-Staggered Multi-Agent Execution', category: 'PSMAS', action: 'startSweep', icon: Play, color: '#3fb950' },
+  { cmd: 'ACCEPT ALL', desc: 'Accept all pending surgical diff hunks', category: 'Diff', action: 'acceptAll', icon: CheckCircle2, color: '#3fb950' },
+  { cmd: 'TIDY CANVAS', desc: 'Auto-arrange graph nodes in hierarchical layout', category: 'ObjectGraph', action: 'navigateGraph', icon: LayoutGrid, color: '#58a6ff' },
+  { cmd: 'OPEN IDE', desc: 'Open Monaco Code Editor workspace', category: 'IDE', action: 'navigateIDE', icon: Code, color: '#bc8cff' },
+  { cmd: 'SAFE BARRIER', desc: 'Enforce human-in-the-loop validation barrier', category: 'Security', action: 'openBarrier', icon: ShieldCheck, color: '#d29922' },
+  { cmd: 'VIEW DIFFS', desc: 'Open Surgical Diff Picker workspace', category: 'Diff', action: 'navigateDiff', icon: GitPullRequest, color: '#d29922' },
+  { cmd: 'VIEW GRAPH', desc: 'Open ObjectGraph AST Canvas', category: 'Graph', action: 'navigateGraph', icon: Network, color: '#3fb950' },
 ];
 
 export default function CommandPage() {
   const [query, setQuery] = useState('');
+  const [executedCmd, setExecutedCmd] = useState<string | null>(null);
   const nodes = useOmniStore(state => state.nodes);
   const startPSMASSweep = useOmniStore(state => state.startPSMASSweep);
+  const acceptAllHunks = useOmniStore(state => state.acceptAllHunks);
+  const openApprovalModal = useOmniStore(state => state.openApprovalModal);
+  const selectNode = useOmniStore(state => state.selectNode);
+  const router = useRouter();
+
+  // Global ⌘K / Ctrl+K listener
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        const input = document.getElementById('command-search-input');
+        input?.focus();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
+
+  const executeCommand = (action: string) => {
+    setExecutedCmd(action);
+    setTimeout(() => setExecutedCmd(null), 1500);
+
+    switch (action) {
+      case 'startSweep':
+        startPSMASSweep();
+        router.push('/psmas');
+        break;
+      case 'acceptAll':
+        acceptAllHunks();
+        break;
+      case 'navigateGraph':
+        router.push('/graph');
+        break;
+      case 'navigateIDE':
+        router.push('/ide');
+        break;
+      case 'navigateDiff':
+        router.push('/diff');
+        break;
+      case 'openBarrier':
+        openApprovalModal();
+        break;
+    }
+  };
+
+  const handleNodeClick = (nodeId: string) => {
+    selectNode(nodeId);
+    router.push('/graph');
+  };
+
+  const filteredCommands = COMMANDS.filter(c =>
+    c.cmd.toLowerCase().includes(query.toLowerCase()) ||
+    c.desc.toLowerCase().includes(query.toLowerCase()) ||
+    c.category.toLowerCase().includes(query.toLowerCase())
+  );
 
   const filteredNodes = nodes.filter(n =>
     n.label.toLowerCase().includes(query.toLowerCase()) ||
@@ -31,12 +90,14 @@ export default function CommandPage() {
           <h1 className="font-bold text-[#e6edf3]">Command Center (⌘K) & AST Traversal Matrix</h1>
           <span className="text-[10px] text-[#8b949e]">Screen 7</span>
         </div>
+        <span className="text-[10px] text-[#6e7681] font-mono">Press ⌘K / Ctrl+K to focus</span>
       </div>
 
       {/* Main Search Input */}
       <div className="relative">
         <Search className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-[#8b949e]" />
         <input
+          id="command-search-input"
           type="text"
           placeholder="Type a command or search .og AST symbols, functions, or files..."
           value={query}
@@ -50,24 +111,36 @@ export default function CommandPage() {
         {/* Left: Quick Actions */}
         <div className="p-4 rounded-xl bg-[#161b22] border border-[#30363d] space-y-3">
           <h2 className="text-xs font-bold uppercase text-[#8b949e] tracking-wider">
-            System Commands & Shortcuts
+            System Commands & Shortcuts ({filteredCommands.length})
           </h2>
           <div className="space-y-2">
-            {COMMANDS.map((c, i) => (
-              <div
-                key={i}
-                onClick={c.cmd === 'RUN SWEEP' ? startPSMASSweep : undefined}
-                className="flex items-center justify-between p-2.5 rounded-lg bg-[#0d1117] border border-[#30363d] hover:border-[#58a6ff] cursor-pointer transition-all"
-              >
-                <div className="flex items-center gap-2">
-                  <span className="px-2 py-0.5 rounded bg-[#21262d] text-[#58a6ff] font-bold text-[10px]">
-                    {c.cmd}
-                  </span>
-                  <span className="text-[#e6edf3] text-xs">{c.desc}</span>
+            {filteredCommands.map((c, i) => {
+              const Icon = c.icon;
+              const isExecuted = executedCmd === c.action;
+              return (
+                <div
+                  key={i}
+                  onClick={() => executeCommand(c.action)}
+                  className={`flex items-center justify-between p-2.5 rounded-lg border cursor-pointer transition-all ${
+                    isExecuted
+                      ? 'bg-[#16291e] border-[#238636] shadow-[0_0_12px_rgba(63,185,80,0.3)]'
+                      : 'bg-[#0d1117] border-[#30363d] hover:border-[#58a6ff] hover:shadow-[0_0_8px_rgba(88,166,255,0.15)]'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <Icon className="w-3.5 h-3.5" style={{ color: c.color }} />
+                    <span className="px-2 py-0.5 rounded bg-[#21262d] font-bold text-[10px]" style={{ color: c.color }}>
+                      {c.cmd}
+                    </span>
+                    <span className="text-[#e6edf3] text-xs">{c.desc}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] text-[#6e7681]">{c.category}</span>
+                    {isExecuted && <CheckCircle2 className="w-3.5 h-3.5 text-[#3fb950]" />}
+                  </div>
                 </div>
-                <span className="text-[10px] text-[#6e7681]">{c.category}</span>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 
@@ -78,9 +151,16 @@ export default function CommandPage() {
           </h2>
           <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
             {filteredNodes.map(n => (
-              <div key={n.id} className="p-2.5 rounded-lg bg-[#0d1117] border border-[#30363d] space-y-1">
+              <div
+                key={n.id}
+                onClick={() => handleNodeClick(n.id)}
+                className="p-2.5 rounded-lg bg-[#0d1117] border border-[#30363d] space-y-1 cursor-pointer hover:border-[#58a6ff] hover:shadow-[0_0_8px_rgba(88,166,255,0.15)] transition-all group"
+              >
                 <div className="flex items-center justify-between text-xs">
-                  <span className="font-bold text-[#58a6ff]">{n.label}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-[#58a6ff]">{n.label}</span>
+                    <ExternalLink className="w-3 h-3 text-[#6e7681] opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </div>
                   <span className="text-[10px] text-[#3fb950] bg-[#16291e] px-1.5 py-0.5 rounded border border-[#238636]">
                     {n.tokenCount} tokens
                   </span>

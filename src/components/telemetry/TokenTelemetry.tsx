@@ -1,11 +1,12 @@
 'use client';
 
-import React from 'react';
-import { BarChart3 } from 'lucide-react';
+import React, { useState } from 'react';
+import { BarChart3, TrendingUp, DollarSign, Cpu } from 'lucide-react';
 import { useOmniStore } from '@/lib/store/useOmniStore';
 
 export const TokenTelemetry: React.FC = () => {
   const telemetry = useOmniStore(state => state.telemetry);
+  const [monthlyPRs, setMonthlyPRs] = useState(100);
 
   // SVG circular donut constants
   const size = 120;
@@ -16,6 +17,12 @@ export const TokenTelemetry: React.FC = () => {
   const percentage = Math.round(telemetry.savingsPercentage || 72);
   const strokeDashoffset = circumference - (percentage / 100) * circumference;
 
+  // Dynamic cost calculations based on slider
+  const baselineCostPerPR = telemetry.baselineCostUSD || 0.104;
+  const optimizedCostPerPR = telemetry.currentCostUSD || 0.065;
+  const monthlySavings = ((baselineCostPerPR - optimizedCostPerPR) * monthlyPRs);
+  const annualSavings = monthlySavings * 12;
+
   return (
     <div className="flex flex-col h-full bg-[#161b22] text-[#e6edf3] font-sans overflow-hidden select-none p-3 justify-between">
       {/* ── Header ── */}
@@ -25,6 +32,10 @@ export const TokenTelemetry: React.FC = () => {
           <h2 className="text-xs font-semibold text-[#e6edf3] tracking-tight">
             Token Telemetry
           </h2>
+        </div>
+        <div className="flex items-center gap-1 text-[10px] text-[#8b949e] font-mono">
+          <Cpu className="w-3 h-3" />
+          <span>{telemetry.totalGraphNodes} nodes · {telemetry.traversalHops} hops</span>
         </div>
       </div>
 
@@ -76,7 +87,7 @@ export const TokenTelemetry: React.FC = () => {
             Baseline (Claude Code)
           </span>
           <span className="text-xs font-bold text-[#f85149] font-mono mt-0.5">
-            ${telemetry.baselineCostUSD ? telemetry.baselineCostUSD.toFixed(3) : '0.104'}
+            ${baselineCostPerPR.toFixed(3)}
           </span>
           <span className="text-[9px] text-[#6e7681]">per task</span>
         </div>
@@ -87,16 +98,48 @@ export const TokenTelemetry: React.FC = () => {
             OmniGraph Studio
           </span>
           <span className="text-xs font-bold text-[#3fb950] font-mono mt-0.5">
-            ${telemetry.currentCostUSD ? telemetry.currentCostUSD.toFixed(3) : '0.065'}
+            ${optimizedCostPerPR.toFixed(3)}
           </span>
           <span className="text-[9px] text-[#6e7681]">per task</span>
         </div>
       </div>
 
-      {/* ── Footer ── */}
-      <div className="pt-2 border-t border-[#30363d] flex items-center justify-between text-xs font-mono">
-        <span className="text-[#8b949e] text-[11px]">Est. monthly savings</span>
-        <span className="text-xs font-bold text-[#3fb950]">$1,248.60</span>
+      {/* ── Interactive Monthly PR Volume Slider ── */}
+      <div className="space-y-1.5 pt-2 border-t border-[#30363d]">
+        <div className="flex items-center justify-between text-[10px] font-mono">
+          <span className="text-[#8b949e]">Monthly PR Volume</span>
+          <span className="text-[#58a6ff] font-bold">{monthlyPRs} PRs/mo</span>
+        </div>
+        <input
+          type="range"
+          min={10}
+          max={1000}
+          step={10}
+          value={monthlyPRs}
+          onChange={(e) => setMonthlyPRs(Number(e.target.value))}
+          className="w-full h-1.5 rounded-full appearance-none cursor-pointer bg-[#21262d] accent-[#3fb950]"
+        />
+        <div className="flex justify-between text-[9px] text-[#6e7681] font-mono">
+          <span>10</span>
+          <span>500</span>
+          <span>1,000</span>
+        </div>
+      </div>
+
+      {/* ── Dynamic Savings Footer ── */}
+      <div className="pt-2 border-t border-[#30363d] grid grid-cols-2 gap-2 text-xs font-mono">
+        <div className="flex flex-col">
+          <span className="text-[#8b949e] text-[10px]">Monthly Savings</span>
+          <span className="text-sm font-bold text-[#3fb950]">
+            ${monthlySavings.toFixed(2)}
+          </span>
+        </div>
+        <div className="flex flex-col text-right">
+          <span className="text-[#8b949e] text-[10px]">Annual Savings</span>
+          <span className="text-sm font-bold text-[#3fb950]">
+            ${annualSavings.toFixed(2)}
+          </span>
+        </div>
       </div>
     </div>
   );

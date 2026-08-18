@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useOmniStore } from '@/lib/store/useOmniStore';
-import { Terminal, Trash2, Filter, Copy, Check, Radio, Cpu, Sparkles } from 'lucide-react';
+import { Terminal, Trash2, Filter, Copy, Check, Radio, Cpu, Sparkles, Download, ArrowDown } from 'lucide-react';
 import { LogLevel } from '@/lib/types';
 
 const LEVEL_COLORS: Record<LogLevel, { badge: string; text: string }> = {
@@ -17,21 +17,61 @@ const LEVEL_COLORS: Record<LogLevel, { badge: string; text: string }> = {
   error: { badge: 'bg-rose-500/20 text-rose-300 border-rose-500/30 font-bold', text: 'text-rose-300' },
 };
 
+const AGENT_FILTERS = [
+  { value: 'all', label: 'All Events' },
+  { value: 'reasoning', label: 'Reasoning' },
+  { value: 'traversal', label: 'Traversal' },
+  { value: 'patch', label: 'Patches' },
+  { value: 'test', label: 'Tests' },
+  { value: 'security', label: 'Security' },
+  { value: 'success', label: 'Success' },
+  { value: 'error', label: 'Errors' },
+];
+
 export const TerminalLogs: React.FC = () => {
   const logs = useOmniStore(state => state.logs);
   const clearLogs = useOmniStore(state => state.clearLogs);
   const logFilter = useOmniStore(state => state.logFilter);
   const setLogFilter = useOmniStore(state => state.setLogFilter);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [copiedAll, setCopiedAll] = useState(false);
+  const [autoScroll, setAutoScroll] = useState(true);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   const filteredLogs = logs.filter(
     log => logFilter === 'all' || log.level === logFilter
   );
 
+  // Auto-scroll to top (newest) when new logs arrive
+  useEffect(() => {
+    if (autoScroll && scrollRef.current) {
+      scrollRef.current.scrollTop = 0;
+    }
+  }, [logs.length, autoScroll]);
+
   const copyLog = (id: string, text: string) => {
     navigator.clipboard.writeText(text);
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  const copyAllLogs = () => {
+    const allText = filteredLogs
+      .map(l => `[${l.timestamp}] [${l.agentName}] [${l.level}] ${l.message}${l.codeSnippet ? '\n' + l.codeSnippet : ''}`)
+      .join('\n\n');
+    navigator.clipboard.writeText(allText);
+    setCopiedAll(true);
+    setTimeout(() => setCopiedAll(false), 2000);
+  };
+
+  const exportJSON = () => {
+    const blob = new Blob([JSON.stringify(filteredLogs, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `omnigraph-logs-${new Date().toISOString().slice(0, 19)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   return (
@@ -49,7 +89,7 @@ export const TerminalLogs: React.FC = () => {
         </div>
 
         {/* Filters & Actions */}
-        <div className="flex items-center gap-2 text-xs">
+        <div className="flex items-center gap-1.5 text-xs">
           <div className="flex items-center gap-1 bg-[#141722] px-2 py-0.5 rounded border border-[#222638]">
             <Filter className="w-3 h-3 text-zinc-500" />
             <select
@@ -57,19 +97,40 @@ export const TerminalLogs: React.FC = () => {
               onChange={(e) => setLogFilter(e.target.value)}
               className="bg-transparent text-[11px] text-zinc-300 focus:outline-none cursor-pointer"
             >
-              <option value="all">All Events</option>
-              <option value="reasoning">Reasoning</option>
-              <option value="traversal">Traversal</option>
-              <option value="patch">Patches</option>
-              <option value="test">Tests</option>
-              <option value="security">Security</option>
+              {AGENT_FILTERS.map(f => (
+                <option key={f.value} value={f.value}>{f.label}</option>
+              ))}
             </select>
           </div>
 
           <button
+            onClick={copyAllLogs}
+            title="Copy All Logs"
+            className="p-1 rounded hover:bg-[#1a1e2d] text-zinc-400 hover:text-zinc-200 transition-colors"
+          >
+            {copiedAll ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+          </button>
+
+          <button
+            onClick={exportJSON}
+            title="Export as JSON"
+            className="p-1 rounded hover:bg-[#1a1e2d] text-zinc-400 hover:text-zinc-200 transition-colors"
+          >
+            <Download className="w-3.5 h-3.5" />
+          </button>
+
+          <button
+            onClick={() => setAutoScroll(!autoScroll)}
+            title={autoScroll ? 'Auto-scroll ON' : 'Auto-scroll OFF'}
+            className={`p-1 rounded transition-colors ${autoScroll ? 'text-emerald-400 bg-emerald-500/10' : 'text-zinc-400 hover:bg-[#1a1e2d]'}`}
+          >
+            <ArrowDown className="w-3.5 h-3.5" />
+          </button>
+
+          <button
             onClick={clearLogs}
             title="Clear Stream"
-            className="p-1 rounded hover:bg-[#1a1e2d] text-zinc-400 hover:text-zinc-200 transition-colors"
+            className="p-1 rounded hover:bg-[#1a1e2d] text-zinc-400 hover:text-red-400 transition-colors"
           >
             <Trash2 className="w-3.5 h-3.5" />
           </button>
@@ -77,7 +138,7 @@ export const TerminalLogs: React.FC = () => {
       </div>
 
       {/* Terminal Output Body */}
-      <div className="flex-1 p-3 overflow-y-auto space-y-2.5 text-xs select-text">
+      <div ref={scrollRef} className="flex-1 p-3 overflow-y-auto space-y-2.5 text-xs select-text">
         {filteredLogs.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-zinc-600 space-y-2">
             <Radio className="w-6 h-6 text-zinc-700 animate-pulse" />
