@@ -78,7 +78,7 @@ export const AppHeader: React.FC = () => {
       {/* Center: Global RUN PSMAS SWEEP Action Button */}
       <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
         <button
-          onClick={isAgentRunning ? pausePSMASSweep : startPSMASSweep}
+          onClick={() => (isAgentRunning ? pausePSMASSweep() : startPSMASSweep())}
           className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-1.5 rounded-lg text-xs font-mono font-bold transition-all min-h-[34px] sm:min-h-[36px] shadow-md ${
             isAgentRunning
               ? 'bg-[#d29922] text-[#0d1117] shadow-[0_0_12px_rgba(210,153,34,0.4)]'

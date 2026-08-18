@@ -47,7 +47,7 @@ interface OmniStoreState {
   isAgentRunning: boolean;
   currentStepIndex: number;
   playbackSpeed: number;
-  startPSMASSweep: () => Promise<void>;
+  startPSMASSweep: (promptOverride?: string) => Promise<void>;
   pausePSMASSweep: () => void;
   resetPSMASSweep: () => void;
   setPlaybackSpeed: (speed: number) => void;
@@ -271,7 +271,7 @@ export const useOmniStore = create<OmniStoreState>((set, get) => ({
   isAgentRunning: false,
   currentStepIndex: 0,
   playbackSpeed: 1,
-  startPSMASSweep: async () => {
+  startPSMASSweep: async (promptOverride?: string) => {
     if (get().isAgentRunning) return;
     set({ isAgentRunning: true });
 
@@ -333,7 +333,8 @@ export const useOmniStore = create<OmniStoreState>((set, get) => ({
       });
 
       // Build prompt with real code context
-      const prompt = `You are the ${agent.name} (${agent.role}). Analyze this code and provide your assessment:\n\nFile: ${activeFile?.path || 'unknown'}\nNode: ${selectedNode?.label || 'root'}\nTask: ${get().activeScenario.description}\n\nCode:\n\`\`\`\n${codeContext}\n\`\`\`\n\n${phase.id === 'codewriter' ? 'Generate a unified diff (with @@ hunk headers) for any fixes you recommend.' : phase.id === 'testrunner' ? 'List specific test assertions that should pass.' : phase.id === 'security' ? 'List any security vulnerabilities found.' : 'Analyze the architecture and identify key dependencies and potential issues.'}`;
+      const targetGoal = promptOverride || get().activeScenario.description;
+      const prompt = `You are the ${agent.name} (${agent.role}). User Request: "${targetGoal}"\n\nFile: ${activeFile?.path || 'unknown'}\nNode: ${selectedNode?.label || 'root'}\n\nCode:\n\`\`\`\n${codeContext}\n\`\`\`\n\n${phase.id === 'codewriter' ? 'Generate a minimal, surgical unified diff (with @@ hunk headers) for any fixes you recommend.' : phase.id === 'testrunner' ? 'List specific unit test assertions that should pass.' : phase.id === 'security' ? 'List any security vulnerabilities or boundary checks found.' : 'Analyze the architecture and identify key dependencies and potential issues.'}`;
 
       // Estimate input tokens
       const inputTokenEstimate = Math.ceil(prompt.length / 4);

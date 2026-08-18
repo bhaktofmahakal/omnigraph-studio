@@ -78,7 +78,7 @@ export const PSMASRadar: React.FC = () => {
 
   const handleSubmitPrompt = () => {
     if (!customPrompt.trim()) return;
-    startPSMASSweep();
+    startPSMASSweep(customPrompt.trim());
     setCustomPrompt('');
   };
 
@@ -118,7 +118,7 @@ export const PSMASRadar: React.FC = () => {
           </div>
 
           <button
-            onClick={isAgentRunning ? pausePSMASSweep : startPSMASSweep}
+            onClick={() => (isAgentRunning ? pausePSMASSweep() : startPSMASSweep())}
             className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-lg text-xs font-mono font-bold transition-all min-h-[32px] ${
               isAgentRunning
                 ? 'bg-[#d29922] text-[#0d1117] shadow-[0_0_10px_rgba(210,153,34,0.3)]'
