@@ -14,6 +14,8 @@ import {
   FolderGit2,
   FileCode,
   Terminal,
+  Loader2,
+  AlertTriangle,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
@@ -24,13 +26,16 @@ export const RepoIngestModal: React.FC = () => {
   const router = useRouter();
 
   const [activeTab, setActiveTab] = useState<'github' | 'paste' | 'preset'>('github');
-  const [repoName, setRepoName] = useState('My-Enterprise-Backend');
-  const [repoUrl, setRepoUrl] = useState('https://github.com/my-org/core-service');
+  const [repoName, setRepoName] = useState('');
+  const [repoUrl, setRepoUrl] = useState('');
   const [language, setLanguage] = useState<'typescript' | 'python' | 'go' | 'rust' | 'java'>('typescript');
-  const [issueDescription, setIssueDescription] = useState('Fix race condition in session state & add atomic mutex lock');
+  const [issueDescription, setIssueDescription] = useState('');
   const [customCode, setCustomCode] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [progressMessage, setProgressMessage] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
+  const [fetchedFileCount, setFetchedFileCount] = useState(0);
 
   if (!isIngestModalOpen) return null;
 
@@ -47,27 +52,91 @@ export const RepoIngestModal: React.FC = () => {
   const handleIngest = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsProcessing(true);
+    setErrorMessage('');
+    setProgressMessage('');
+    setFetchedFileCount(0);
 
-    // Simulate real AST ingestion parsing
-    await new Promise((r) => setTimeout(r, 600));
+    try {
+      let files: { name: string; path: string; content: string }[] = [];
 
-    const newScenario = generateCustomScenario({
-      repoName: repoName.trim() || 'Custom-Project',
-      repoUrl: repoUrl.trim(),
-      language,
-      issueDescription: issueDescription.trim() || 'Custom AST Optimization & Multi-Agent Patch',
-      customCode: customCode.trim() || undefined,
-    });
+      // ================================================================
+      // GITHUB URL TAB — Real fetch from GitHub API
+      // ================================================================
+      if (activeTab === 'github' && repoUrl.trim()) {
+        setProgressMessage('Fetching repository file tree from GitHub...');
 
-    addScenario(newScenario);
-    setIsProcessing(false);
-    setSuccessMessage(`Successfully ingested ${newScenario.title}! AST Graph generated.`);
+        const res = await fetch('/api/repo/fetch', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ repoUrl: repoUrl.trim() }),
+        });
 
-    setTimeout(() => {
-      setSuccessMessage('');
-      closeIngestModal();
-      router.push('/graph');
-    }, 800);
+        const data = await res.json();
+
+        if (!res.ok || data.error) {
+          throw new Error(data.error || `GitHub fetch failed (HTTP ${res.status})`);
+        }
+
+        files = data.files || [];
+        setFetchedFileCount(files.length);
+        setProgressMessage(`Fetched ${files.length} source files. Parsing AST...`);
+
+        // Auto-detect language from GitHub response
+        if (data.language) {
+          setLanguage(data.language as any);
+        }
+
+        // Auto-set repo name from URL if not set
+        if (!repoName.trim() && data.repo) {
+          setRepoName(data.repo.split('/')[1] || data.repo);
+        }
+      }
+
+      // ================================================================
+      // PASTE CODE TAB — Real parsing of user-pasted code
+      // ================================================================
+      if (activeTab === 'paste' && customCode.trim()) {
+        const ext = language === 'python' ? 'py' : language === 'go' ? 'go' : language === 'rust' ? 'rs' : language === 'java' ? 'java' : 'ts';
+        files = [{ name: `main.${ext}`, path: `src/main.${ext}`, content: customCode.trim() }];
+        setProgressMessage('Parsing pasted code through AST engine...');
+      }
+
+      // ================================================================
+      // PRESET TAB — No files, will use skeleton
+      // ================================================================
+      if (activeTab === 'preset' || files.length === 0) {
+        setProgressMessage('Generating AST from preset configuration...');
+      }
+
+      // REAL PARSING: Call generateCustomScenario with actual file contents
+      const newScenario = generateCustomScenario({
+        repoName: repoName.trim() || 'Untitled-Project',
+        repoUrl: repoUrl.trim(),
+        language,
+        issueDescription: issueDescription.trim() || 'Analyze and optimize codebase',
+        customCode: activeTab === 'paste' ? customCode.trim() : undefined,
+        files: files.length > 0 ? files : undefined,
+      });
+
+      const nodeCount = newScenario.initialNodes.length;
+      const edgeCount = newScenario.initialEdges.length;
+      const totalTokens = newScenario.initialNodes.reduce((s, n) => s + n.tokenCount, 0);
+
+      addScenario(newScenario);
+      setIsProcessing(false);
+      setSuccessMessage(
+        `✓ Parsed ${nodeCount} AST nodes, ${edgeCount} edges, ${totalTokens.toLocaleString()} tokens from ${files.length || 1} file(s).`
+      );
+
+      setTimeout(() => {
+        setSuccessMessage('');
+        closeIngestModal();
+        router.push('/graph');
+      }, 1200);
+    } catch (err: any) {
+      setIsProcessing(false);
+      setErrorMessage(err.message || 'Failed to ingest repository');
+    }
   };
 
   return (
@@ -82,14 +151,14 @@ export const RepoIngestModal: React.FC = () => {
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-sm sm:text-base font-bold text-[#e6edf3]">
-                  Ingest Any Codebase / GitHub Repo
+                  Import & Parse Real Codebase
                 </h2>
                 <span className="text-[10px] bg-[#238636]/20 text-[#3fb950] px-1.5 py-0.5 rounded border border-[#238636]/30 font-semibold hidden xs:inline">
-                  UNIVERSAL AST
+                  REAL AST
                 </span>
               </div>
               <p className="text-[11px] text-[#8b949e]">
-                Parse any repository into typed ObjectGraph AST nodes for PSMAS Swarm.
+                Fetches real files from GitHub and parses actual AST structure.
               </p>
             </div>
           </div>
@@ -117,18 +186,6 @@ export const RepoIngestModal: React.FC = () => {
           </button>
 
           <button
-            onClick={() => setActiveTab('preset')}
-            className={`flex items-center gap-1.5 py-2.5 text-xs font-semibold border-b-2 transition-all ${
-              activeTab === 'preset'
-                ? 'border-[#58a6ff] text-[#58a6ff]'
-                : 'border-transparent text-[#8b949e] hover:text-[#e6edf3]'
-            }`}
-          >
-            <Layers className="w-3.5 h-3.5" />
-            <span>Stack Presets</span>
-          </button>
-
-          <button
             onClick={() => setActiveTab('paste')}
             className={`flex items-center gap-1.5 py-2.5 text-xs font-semibold border-b-2 transition-all ${
               activeTab === 'paste'
@@ -138,6 +195,18 @@ export const RepoIngestModal: React.FC = () => {
           >
             <FileCode className="w-3.5 h-3.5" />
             <span>Paste Code</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('preset')}
+            className={`flex items-center gap-1.5 py-2.5 text-xs font-semibold border-b-2 transition-all ${
+              activeTab === 'preset'
+                ? 'border-[#58a6ff] text-[#58a6ff]'
+                : 'border-transparent text-[#8b949e] hover:text-[#e6edf3]'
+            }`}
+          >
+            <Layers className="w-3.5 h-3.5" />
+            <span>Presets</span>
           </button>
         </div>
 
@@ -150,6 +219,23 @@ export const RepoIngestModal: React.FC = () => {
             </div>
           )}
 
+          {errorMessage && (
+            <div className="flex items-center gap-2 p-3 bg-[#2d191e] border border-[#f85149]/40 text-[#f85149] rounded-xl text-xs font-semibold">
+              <AlertTriangle className="w-4 h-4 shrink-0" />
+              <span>{errorMessage}</span>
+            </div>
+          )}
+
+          {progressMessage && isProcessing && (
+            <div className="flex items-center gap-2 p-3 bg-[#0d1117] border border-[#58a6ff]/40 text-[#58a6ff] rounded-xl text-xs font-semibold">
+              <Loader2 className="w-4 h-4 shrink-0 animate-spin" />
+              <span>{progressMessage}</span>
+              {fetchedFileCount > 0 && (
+                <span className="ml-auto text-[10px] text-[#8b949e]">{fetchedFileCount} files</span>
+              )}
+            </div>
+          )}
+
           {/* Preset Quick Select */}
           {activeTab === 'preset' && (
             <div className="space-y-2">
@@ -158,26 +244,10 @@ export const RepoIngestModal: React.FC = () => {
               </label>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {[
-                  {
-                    name: 'FastAPI Microservice',
-                    lang: 'python' as const,
-                    desc: 'Async worker deadlock in Redis lock queue',
-                  },
-                  {
-                    name: 'Go Distributed Service',
-                    lang: 'go' as const,
-                    desc: 'Goroutine channel leak during retry loop',
-                  },
-                  {
-                    name: 'Rust Performance Engine',
-                    lang: 'rust' as const,
-                    desc: 'Atomic pointer race condition on buffer swap',
-                  },
-                  {
-                    name: 'Java Spring Boot API',
-                    lang: 'java' as const,
-                    desc: 'Connection pool starvation in Hibernate tx',
-                  },
+                  { name: 'FastAPI Microservice', lang: 'python' as const, desc: 'Async worker deadlock in Redis lock queue' },
+                  { name: 'Go Distributed Service', lang: 'go' as const, desc: 'Goroutine channel leak during retry loop' },
+                  { name: 'Rust Performance Engine', lang: 'rust' as const, desc: 'Atomic pointer race condition on buffer swap' },
+                  { name: 'Java Spring Boot API', lang: 'java' as const, desc: 'Connection pool starvation in Hibernate tx' },
                 ].map((p, idx) => (
                   <button
                     key={idx}
@@ -186,12 +256,8 @@ export const RepoIngestModal: React.FC = () => {
                     className="p-2.5 rounded-xl bg-[#161b22] hover:bg-[#21262d] border border-[#30363d] text-left transition-colors group"
                   >
                     <div className="flex items-center justify-between">
-                      <span className="font-bold text-[#e6edf3] group-hover:text-[#58a6ff]">
-                        {p.name}
-                      </span>
-                      <span className="text-[9px] uppercase px-1.5 py-0.5 rounded bg-[#0d1117] text-[#8b949e]">
-                        {p.lang}
-                      </span>
+                      <span className="font-bold text-[#e6edf3] group-hover:text-[#58a6ff]">{p.name}</span>
+                      <span className="text-[9px] uppercase px-1.5 py-0.5 rounded bg-[#0d1117] text-[#8b949e]">{p.lang}</span>
                     </div>
                     <p className="text-[10px] text-[#8b949e] mt-1 line-clamp-1">{p.desc}</p>
                   </button>
@@ -200,18 +266,17 @@ export const RepoIngestModal: React.FC = () => {
             </div>
           )}
 
-          {/* Repo Name & URL */}
+          {/* Repo Name & Language */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <label className="text-[11px] text-[#8b949e] font-semibold flex items-center gap-1">
-                <Code2 className="w-3 h-3 text-[#58a6ff]" /> Project / Repository Name
+                <Code2 className="w-3 h-3 text-[#58a6ff]" /> Project Name
               </label>
               <input
                 type="text"
-                required
                 value={repoName}
                 onChange={(e) => setRepoName(e.target.value)}
-                placeholder="e.g. Acme-Core-API"
+                placeholder="Auto-detected from URL"
                 className="w-full bg-[#161b22] border border-[#30363d] rounded-lg px-3 py-2 text-[#e6edf3] placeholder:text-[#484f58] focus:outline-none focus:border-[#58a6ff]"
               />
             </div>
@@ -226,10 +291,10 @@ export const RepoIngestModal: React.FC = () => {
                 className="w-full bg-[#161b22] border border-[#30363d] rounded-lg px-3 py-2 text-[#e6edf3] focus:outline-none focus:border-[#58a6ff] cursor-pointer"
               >
                 <option value="typescript">TypeScript / JavaScript</option>
-                <option value="python">Python (Django / FastAPI / Flask)</option>
-                <option value="go">Go (Golang Microservices)</option>
-                <option value="rust">Rust (Systems / WebAssembly)</option>
-                <option value="java">Java (Spring Boot / Maven)</option>
+                <option value="python">Python</option>
+                <option value="go">Go (Golang)</option>
+                <option value="rust">Rust</option>
+                <option value="java">Java</option>
               </select>
             </div>
           </div>
@@ -237,44 +302,46 @@ export const RepoIngestModal: React.FC = () => {
           {activeTab === 'github' && (
             <div className="space-y-1.5">
               <label className="text-[11px] text-[#8b949e] font-semibold flex items-center gap-1">
-                <GitBranch className="w-3.5 h-3.5 text-[#8b949e]" /> GitHub Repository Clone URL
+                <GitBranch className="w-3.5 h-3.5 text-[#8b949e]" /> GitHub Repository URL
               </label>
               <input
                 type="url"
                 value={repoUrl}
                 onChange={(e) => setRepoUrl(e.target.value)}
-                placeholder="https://github.com/organization/repo"
+                placeholder="https://github.com/owner/repo"
                 className="w-full bg-[#161b22] border border-[#30363d] rounded-lg px-3 py-2 text-[#e6edf3] placeholder:text-[#484f58] focus:outline-none focus:border-[#58a6ff]"
               />
+              <p className="text-[10px] text-[#6e7681]">
+                Public repos only. Fetches up to 15 source files via GitHub API.
+              </p>
             </div>
           )}
 
-          {/* Issue / Goal Description */}
+          {/* Issue Description */}
           <div className="space-y-1.5">
             <label className="text-[11px] text-[#8b949e] font-semibold flex items-center gap-1">
-              <Terminal className="w-3 h-3 text-[#d29922]" /> Target Issue / Refactor Goal
+              <Terminal className="w-3 h-3 text-[#d29922]" /> What should the AI analyze?
             </label>
             <input
               type="text"
-              required
               value={issueDescription}
               onChange={(e) => setIssueDescription(e.target.value)}
-              placeholder="e.g. Fix race condition, add JWT rotation, optimize SQL queries..."
+              placeholder="e.g. Find bugs, optimize performance, add error handling..."
               className="w-full bg-[#161b22] border border-[#30363d] rounded-lg px-3 py-2 text-[#e6edf3] placeholder:text-[#484f58] focus:outline-none focus:border-[#58a6ff]"
             />
           </div>
 
-          {/* Raw Code Paste (if active) */}
+          {/* Raw Code Paste */}
           {activeTab === 'paste' && (
             <div className="space-y-1.5">
               <label className="text-[11px] text-[#8b949e] font-semibold">
-                Paste Source Code (AST will parse classes & functions):
+                Paste your source code (real AST parsing, not template):
               </label>
               <textarea
-                rows={5}
+                rows={8}
                 value={customCode}
                 onChange={(e) => setCustomCode(e.target.value)}
-                placeholder={`// Paste your source code here...\nclass CoreEngine {\n  processRequest() { ... }\n}`}
+                placeholder={`// Paste your real code here.\n// The AST parser will extract actual functions, classes, imports.\n\nexport class UserService {\n  async findById(id: string): Promise<User> {\n    return this.db.query('SELECT * FROM users WHERE id = $1', [id]);\n  }\n}`}
                 className="w-full bg-[#161b22] border border-[#30363d] rounded-lg p-3 text-[#e6edf3] font-mono text-[11px] placeholder:text-[#484f58] focus:outline-none focus:border-[#58a6ff] resize-none"
               />
             </div>
@@ -295,8 +362,17 @@ export const RepoIngestModal: React.FC = () => {
               disabled={isProcessing}
               className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-2 rounded-lg bg-[#238636] hover:bg-[#2ea043] text-white font-bold transition-all shadow-md hover:shadow-[0_0_15px_rgba(46,160,67,0.4)] disabled:opacity-50"
             >
-              <Sparkles className="w-4 h-4" />
-              <span>{isProcessing ? 'Parsing AST Topology...' : 'Ingest & Generate AST Graph'}</span>
+              {isProcessing ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Parsing...</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-4 h-4" />
+                  <span>Parse & Build Graph</span>
+                </>
+              )}
             </button>
           </div>
         </form>
