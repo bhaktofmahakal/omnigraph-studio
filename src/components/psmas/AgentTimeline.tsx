@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Activity, Lightbulb, FileText, Search, Edit3, ShieldCheck, CheckCircle2, ArrowRight, ExternalLink, X, Clock, Cpu, FileCode } from 'lucide-react';
+import { Activity, Lightbulb, FileText, Search, Edit3, ShieldCheck, CheckCircle2, ArrowRight, X, Clock, Cpu, FileCode } from 'lucide-react';
 import { useOmniStore } from '@/lib/store/useOmniStore';
 
 const TIMELINE_STAGES = [
@@ -99,16 +99,16 @@ export const AgentTimeline: React.FC = () => {
   const activeStage = TIMELINE_STAGES.find(s => s.id === selectedStage);
 
   return (
-    <div className="mx-4 mb-4 rounded-xl bg-[#161b22] border border-[#30363d] p-3 text-[#e6edf3] font-sans select-none shadow-xl">
+    <div className="w-full rounded-xl bg-[#161b22] border border-[#30363d] p-3 sm:p-4 text-[#e6edf3] font-sans select-none shadow-xl min-w-0">
       {/* ── Header ── */}
-      <div className="flex items-center justify-between pb-2 mb-2 border-b border-[#30363d] px-1">
+      <div className="flex flex-wrap items-center justify-between pb-2 mb-2 border-b border-[#30363d] px-1 gap-2">
         <div className="flex items-center gap-2">
-          <Activity className="w-4 h-4 text-[#e6edf3]" />
-          <h3 className="text-xs font-semibold text-[#e6edf3] tracking-tight">
+          <Activity className="w-4 h-4 text-[#e6edf3] shrink-0" />
+          <h3 className="text-xs sm:text-sm font-semibold text-[#e6edf3] tracking-tight">
             Agent Activity Timeline
           </h3>
           {isAgentRunning && (
-            <span className="px-1.5 py-0.5 rounded text-[9px] bg-[#3fb950]/10 text-[#3fb950] border border-[#238636] animate-pulse font-mono">
+            <span className="px-1.5 py-0.5 rounded text-[9px] bg-[#3fb950]/10 text-[#3fb950] border border-[#238636] animate-pulse font-mono shrink-0">
               LIVE
             </span>
           )}
@@ -118,7 +118,7 @@ export const AgentTimeline: React.FC = () => {
       </div>
 
       {/* ── Horizontal Stage Cards Sequence ── */}
-      <div className="flex items-center justify-between gap-1 overflow-x-auto py-1">
+      <div className="flex items-center justify-between gap-1 overflow-x-auto custom-scrollbar py-2 px-1 min-w-0">
         {TIMELINE_STAGES.map((stage, idx) => {
           const Icon = stage.icon;
           const isLast = idx === TIMELINE_STAGES.length - 1;
@@ -130,7 +130,7 @@ export const AgentTimeline: React.FC = () => {
               {/* Stage Card */}
               <div
                 onClick={() => setSelectedStage(isSelected ? null : stage.id)}
-                className={`flex-1 min-w-[145px] p-2.5 rounded-xl bg-[#0d1117] border transition-all cursor-pointer ${
+                className={`flex-1 min-w-[130px] sm:min-w-[145px] p-2 sm:p-2.5 rounded-xl bg-[#0d1117] border transition-all cursor-pointer shrink-0 ${
                   isSelected
                     ? 'border-[#58a6ff] shadow-[0_0_16px_rgba(88,166,255,0.3)] scale-[1.02]'
                     : isActive
@@ -141,23 +141,23 @@ export const AgentTimeline: React.FC = () => {
               >
                 {/* Stage Title & Icon */}
                 <div className="flex items-center gap-1.5 mb-1">
-                  <Icon className={`w-3.5 h-3.5 ${isActive ? 'animate-pulse' : ''}`} style={{ color: stage.color }} />
-                  <span className="text-xs font-semibold" style={{ color: stage.color }}>
+                  <Icon className={`w-3.5 h-3.5 shrink-0 ${isActive ? 'animate-pulse' : ''}`} style={{ color: stage.color }} />
+                  <span className="text-xs font-semibold truncate" style={{ color: stage.color }}>
                     {stage.name}
                   </span>
                 </div>
 
                 {/* Agent & Timestamp */}
-                <div className="text-[11px] text-[#8b949e] font-medium truncate">
+                <div className="text-[10px] sm:text-[11px] text-[#8b949e] font-medium truncate">
                   {stage.agent}
                 </div>
-                <div className="text-[10px] font-mono text-[#6e7681] mt-0.5">
+                <div className="text-[9px] sm:text-[10px] font-mono text-[#6e7681] mt-0.5">
                   {stage.time}
                 </div>
 
                 {/* Detail string */}
-                <div className="text-[10px] text-[#8b949e] truncate mt-1">
-                  {stage.detail.slice(0, 40)}...
+                <div className="text-[9px] sm:text-[10px] text-[#8b949e] truncate mt-1">
+                  {stage.detail}
                 </div>
               </div>
 
@@ -174,16 +174,17 @@ export const AgentTimeline: React.FC = () => {
 
       {/* ── Stage Detail Inspector (Modal-like Drawer) ── */}
       {activeStage && (
-        <div className="mt-3 p-4 rounded-xl bg-[#0d1117] border border-[#58a6ff]/30 space-y-3 shadow-[0_0_20px_rgba(88,166,255,0.1)]">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <activeStage.icon className="w-4 h-4" style={{ color: activeStage.color }} />
-              <h4 className="text-sm font-bold" style={{ color: activeStage.color }}>{activeStage.name}</h4>
-              <span className="text-[10px] text-[#8b949e] font-mono">({activeStage.agent})</span>
+        <div className="mt-3 p-3 sm:p-4 rounded-xl bg-[#0d1117] border border-[#58a6ff]/30 space-y-3 shadow-[0_0_20px_rgba(88,166,255,0.1)] animate-in fade-in">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <activeStage.icon className="w-4 h-4 shrink-0" style={{ color: activeStage.color }} />
+              <h4 className="text-xs sm:text-sm font-bold truncate" style={{ color: activeStage.color }}>{activeStage.name}</h4>
+              <span className="text-[10px] text-[#8b949e] font-mono shrink-0">({activeStage.agent})</span>
             </div>
             <button
               onClick={() => setSelectedStage(null)}
-              className="p-1 rounded hover:bg-[#21262d] text-[#8b949e] hover:text-[#e6edf3] transition-colors"
+              className="p-1 rounded hover:bg-[#21262d] text-[#8b949e] hover:text-[#e6edf3] transition-colors shrink-0"
+              aria-label="Close inspector"
             >
               <X className="w-3.5 h-3.5" />
             </button>
@@ -193,7 +194,7 @@ export const AgentTimeline: React.FC = () => {
           <p className="text-xs text-[#e6edf3] leading-relaxed">{activeStage.detail}</p>
 
           {/* Metadata Grid */}
-          <div className="grid grid-cols-3 gap-2 text-[11px] font-mono">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px] font-mono">
             <div className="p-2 rounded-lg bg-[#161b22] border border-[#30363d]">
               <Clock className="w-3 h-3 text-[#8b949e] mb-1" />
               <span className="text-[#6e7681] text-[9px] block">Duration</span>
@@ -206,7 +207,7 @@ export const AgentTimeline: React.FC = () => {
             </div>
             <div className="p-2 rounded-lg bg-[#161b22] border border-[#30363d]">
               <FileCode className="w-3 h-3 text-[#8b949e] mb-1" />
-              <span className="text-[#6e7681] text-[9px] block">Files</span>
+              <span className="text-[#6e7681] text-[9px] block">Files Inspected</span>
               <span className="text-[#58a6ff] font-bold">{activeStage.filesInspected.length}</span>
             </div>
           </div>
@@ -214,10 +215,10 @@ export const AgentTimeline: React.FC = () => {
           {/* Files List */}
           {activeStage.filesInspected.length > 0 && (
             <div className="space-y-1">
-              <span className="text-[10px] text-[#6e7681] font-medium">Files Inspected:</span>
+              <span className="text-[10px] text-[#6e7681] font-medium">Files:</span>
               <div className="flex flex-wrap gap-1">
                 {activeStage.filesInspected.map((f, i) => (
-                  <span key={i} className="px-2 py-0.5 rounded bg-[#161b22] border border-[#30363d] text-[10px] text-[#58a6ff] font-mono">
+                  <span key={i} className="px-2 py-0.5 rounded bg-[#161b22] border border-[#30363d] text-[10px] text-[#58a6ff] font-mono truncate max-w-full">
                     {f}
                   </span>
                 ))}
@@ -226,7 +227,7 @@ export const AgentTimeline: React.FC = () => {
           )}
 
           {/* Reasoning Log */}
-          <div className="p-2.5 rounded-lg bg-[#07080b] border border-[#222638] text-[11px] text-[#8b949e] leading-relaxed font-mono">
+          <div className="p-2.5 rounded-lg bg-[#07080b] border border-[#222638] text-[11px] text-[#8b949e] leading-relaxed font-mono break-words">
             <span className="text-[#6e7681] text-[9px] block mb-1">Agent Reasoning:</span>
             {activeStage.reasoning}
           </div>

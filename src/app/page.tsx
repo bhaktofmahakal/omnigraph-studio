@@ -18,8 +18,6 @@ import {
   ShieldCheck,
   Sparkles,
   Play,
-  FileCode,
-  CheckCircle2,
 } from 'lucide-react';
 import { useOmniStore } from '@/lib/store/useOmniStore';
 
@@ -141,79 +139,79 @@ export default function WorkspaceHome() {
   };
 
   return (
-    <div className="flex flex-col h-full w-full bg-[#0d1117] text-[#e6edf3] p-6 overflow-y-auto font-sans select-none space-y-6">
+    <div className="flex flex-col h-full w-full bg-[#0d1117] text-[#e6edf3] p-3 sm:p-6 lg:p-8 overflow-y-auto custom-scrollbar font-sans select-none space-y-4 sm:space-y-6 min-w-0">
       {/* Hero Welcome Banner */}
-      <div className="rounded-2xl bg-gradient-to-r from-[#161b22] via-[#1c2128] to-[#161b22] border border-[#30363d] p-6 shadow-2xl relative overflow-hidden">
-        <div className="relative z-10 space-y-2 max-w-3xl">
+      <div className="rounded-2xl bg-gradient-to-r from-[#161b22] via-[#1c2128] to-[#161b22] border border-[#30363d] p-4 sm:p-6 lg:p-8 shadow-2xl relative overflow-hidden">
+        <div className="relative z-10 space-y-2.5 max-w-4xl">
           <div className="flex items-center gap-2 text-xs font-mono text-[#3fb950]">
-            <Sparkles className="w-4 h-4" />
-            <span>Open Gigantic (Superbrain) Assignment III</span>
+            <Sparkles className="w-4 h-4 shrink-0" />
+            <span className="truncate">Open Gigantic (Superbrain) Assignment III</span>
           </div>
 
-          <h1 className="text-2xl font-extrabold text-[#e6edf3] tracking-tight">
+          <h1 className="text-lg sm:text-2xl lg:text-3xl font-extrabold text-[#e6edf3] tracking-tight">
             OmniGraph Studio — Multi-Agent Graph-Traversal Engine
           </h1>
 
-          <p className="text-sm text-[#8b949e] leading-relaxed">
+          <p className="text-xs sm:text-sm text-[#8b949e] leading-relaxed">
             Operationalizing TokenFold Context Compression, ObjectGraph (.og) Typed AST Traversal, and Phase-Staggered Multi-Agent Swarm (PSMAS) Scheduling. Select a dedicated tool view below or launch the multi-agent sweep.
           </p>
 
-          <div className="pt-3 flex items-center gap-4 text-xs font-mono flex-wrap">
-            <div className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-[#16291e] border border-[#238636] text-[#3fb950]">
+          <div className="pt-2 flex flex-wrap items-center gap-2.5 sm:gap-4 text-xs font-mono">
+            <div className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-[#16291e] border border-[#238636] text-[#3fb950] shrink-0">
               <Zap className="w-3.5 h-3.5" />
               <span>{telemetry.savingsPercentage}% Token Reduction</span>
             </div>
 
-            <div className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-[#1c2d42] border border-[#38bdf8]/40 text-[#58a6ff]">
+            <div className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-[#1c2d42] border border-[#38bdf8]/40 text-[#58a6ff] shrink-0">
               <ShieldCheck className="w-3.5 h-3.5" />
-              <span>Active Scenario: {activeScenario.title}</span>
+              <span className="truncate">Active Scenario: {activeScenario.title}</span>
             </div>
           </div>
         </div>
       </div>
 
       {/* ── Quick Action Bar ── */}
-      <div className="flex items-center gap-3 flex-wrap">
+      <div className="flex flex-wrap items-center gap-2 sm:gap-3">
         <button
           onClick={() => { startPSMASSweep(); router.push('/psmas'); }}
           disabled={isAgentRunning}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#3fb950] hover:bg-[#2ea043] text-[#0d1117] font-bold text-xs font-mono transition-all shadow-[0_0_12px_rgba(63,185,80,0.3)] disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-xl bg-[#3fb950] hover:bg-[#2ea043] text-[#0d1117] font-bold text-xs font-mono transition-all shadow-[0_0_12px_rgba(63,185,80,0.3)] disabled:opacity-50 disabled:cursor-not-allowed min-h-[38px]"
         >
-          <Play className="w-3.5 h-3.5 fill-current" />
+          <Play className="w-3.5 h-3.5 fill-current shrink-0" />
           <span>Run Full Sweep</span>
         </button>
 
         <button
           onClick={() => router.push('/ide')}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#21262d] hover:bg-[#30363d] text-[#e6edf3] font-medium text-xs font-mono border border-[#30363d] transition-all"
+          className="flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-xl bg-[#21262d] hover:bg-[#30363d] text-[#e6edf3] font-medium text-xs font-mono border border-[#30363d] transition-all min-h-[38px]"
         >
-          <Code className="w-3.5 h-3.5 text-[#38bdf8]" />
+          <Code className="w-3.5 h-3.5 text-[#38bdf8] shrink-0" />
           <span>Open IDE</span>
         </button>
 
         <button
           onClick={() => router.push('/graph')}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#21262d] hover:bg-[#30363d] text-[#e6edf3] font-medium text-xs font-mono border border-[#30363d] transition-all"
+          className="flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-xl bg-[#21262d] hover:bg-[#30363d] text-[#e6edf3] font-medium text-xs font-mono border border-[#30363d] transition-all min-h-[38px]"
         >
-          <Network className="w-3.5 h-3.5 text-[#3fb950]" />
+          <Network className="w-3.5 h-3.5 text-[#3fb950] shrink-0" />
           <span>Inspect AST Canvas</span>
         </button>
 
         {pendingHunks > 0 && (
           <button
             onClick={() => router.push('/diff')}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#2e2316] hover:bg-[#d29922]/20 text-[#d29922] font-medium text-xs font-mono border border-[#d29922]/40 transition-all"
+            className="flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-xl bg-[#2e2316] hover:bg-[#d29922]/20 text-[#d29922] font-medium text-xs font-mono border border-[#d29922]/40 transition-all min-h-[38px]"
           >
-            <GitPullRequest className="w-3.5 h-3.5" />
+            <GitPullRequest className="w-3.5 h-3.5 shrink-0" />
             <span>Review {pendingHunks} Diffs</span>
           </button>
         )}
 
         <button
           onClick={openApprovalModal}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#1b3127] hover:bg-[#238636] text-[#3fb950] font-medium text-xs font-mono border border-[#238636] transition-all"
+          className="flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-xl bg-[#1b3127] hover:bg-[#238636] text-[#3fb950] font-medium text-xs font-mono border border-[#238636] transition-all min-h-[38px]"
         >
-          <ShieldCheck className="w-3.5 h-3.5" />
+          <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
           <span>Safe Barrier</span>
         </button>
       </div>
@@ -224,7 +222,7 @@ export default function WorkspaceHome() {
           Dedicated System Screens & Tool Workspaces
         </h2>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-3 sm:gap-4">
           {MODULE_CARDS.map((card) => {
             const Icon = card.icon;
             const liveBadge = getLiveBadge(card.liveKey);
@@ -233,42 +231,42 @@ export default function WorkspaceHome() {
               <Link
                 key={card.href}
                 href={card.href}
-                className="group flex flex-col justify-between p-5 rounded-xl bg-[#161b22] border border-[#30363d] hover:border-[#58a6ff] hover:shadow-[0_0_20px_rgba(88,166,255,0.15)] transition-all duration-300"
+                className="group flex flex-col justify-between p-4 sm:p-5 rounded-xl bg-[#161b22] border border-[#30363d] hover:border-[#58a6ff] hover:shadow-[0_0_20px_rgba(88,166,255,0.15)] transition-all duration-300 min-h-[160px]"
               >
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
+                <div className="space-y-2.5">
+                  <div className="flex items-center justify-between gap-2">
                     <div
-                      className="w-10 h-10 rounded-lg flex items-center justify-center border border-[#30363d]"
+                      className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center border border-[#30363d] shrink-0"
                       style={{ backgroundColor: `${card.color}15`, borderColor: `${card.color}40` }}
                     >
-                      <Icon className="w-5 h-5" style={{ color: card.color }} />
+                      <Icon className="w-4 h-4 sm:w-5 sm:h-5" style={{ color: card.color }} />
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5 truncate">
                       {liveBadge && (
                         <span
-                          className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded border"
+                          className="text-[9px] font-mono font-bold px-1.5 py-0.2 rounded border truncate"
                           style={{ color: card.color, borderColor: `${card.color}40`, backgroundColor: `${card.color}10` }}
                         >
                           {liveBadge}
                         </span>
                       )}
-                      <span className="text-[10px] font-mono text-[#8b949e] bg-[#0d1117] px-2 py-0.5 rounded border border-[#30363d]">
+                      <span className="text-[10px] font-mono text-[#8b949e] bg-[#0d1117] px-2 py-0.5 rounded border border-[#30363d] shrink-0">
                         {card.badge}
                       </span>
                     </div>
                   </div>
 
-                  <h3 className="text-base font-semibold text-[#e6edf3] group-hover:text-[#58a6ff] transition-colors">
+                  <h3 className="text-sm sm:text-base font-semibold text-[#e6edf3] group-hover:text-[#58a6ff] transition-colors truncate">
                     {card.title}
                   </h3>
 
-                  <p className="text-xs text-[#8b949e] leading-relaxed">
+                  <p className="text-xs text-[#8b949e] leading-relaxed line-clamp-2">
                     {card.desc}
                   </p>
                 </div>
 
-                <div className="pt-4 flex items-center gap-1.5 text-xs font-mono font-medium text-[#58a6ff] group-hover:translate-x-1 transition-transform">
+                <div className="pt-3 flex items-center gap-1.5 text-xs font-mono font-medium text-[#58a6ff] group-hover:translate-x-1 transition-transform shrink-0">
                   <span>Open Dedicated Screen</span>
                   <ArrowRight className="w-3.5 h-3.5" />
                 </div>

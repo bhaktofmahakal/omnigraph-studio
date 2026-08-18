@@ -74,6 +74,12 @@ interface OmniStoreState {
   closeApprovalModal: () => void;
   applyApprovedPatches: () => void;
 
+  // Mobile UI & Sidebar
+  isMobileSidebarOpen: boolean;
+  toggleMobileSidebar: () => void;
+  closeMobileSidebar: () => void;
+  openMobileSidebar: () => void;
+
   // Telemetry & Metrics
   telemetry: TelemetryMetrics;
 
@@ -404,6 +410,12 @@ export const useOmniStore = create<OmniStoreState>((set, get) => ({
       }))
     });
   },
+
+  // Mobile Sidebar
+  isMobileSidebarOpen: false,
+  toggleMobileSidebar: () => set(state => ({ isMobileSidebarOpen: !state.isMobileSidebarOpen })),
+  closeMobileSidebar: () => set({ isMobileSidebarOpen: false }),
+  openMobileSidebar: () => set({ isMobileSidebarOpen: true }),
 
   // Telemetry
   telemetry: initialTelemetry,

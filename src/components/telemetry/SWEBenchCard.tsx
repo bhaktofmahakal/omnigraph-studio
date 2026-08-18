@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { BarChart2, CheckCircle2, XCircle, ChevronDown } from 'lucide-react';
+import { BarChart2, CheckCircle2, XCircle } from 'lucide-react';
 
 const SCENARIOS = [
   {
@@ -54,22 +54,23 @@ export const SWEBenchCard: React.FC = () => {
   const savingsPct = (((activeScenario.baseline - activeScenario.optimized) / activeScenario.baseline) * 100).toFixed(1);
 
   return (
-    <div className="flex flex-col h-full bg-[#161b22] text-[#e6edf3] font-sans overflow-hidden select-none p-3 justify-between">
+    <div className="flex flex-col h-full w-full bg-[#161b22] text-[#e6edf3] font-sans overflow-y-auto custom-scrollbar select-none p-3 sm:p-4 justify-between space-y-3 min-w-0">
       {/* ── Header ── */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between pb-1 border-b border-[#30363d] gap-2 shrink-0">
         <div className="flex items-center gap-2">
-          <BarChart2 className="w-4 h-4 text-[#e6edf3]" />
-          <h2 className="text-xs font-semibold text-[#e6edf3] tracking-tight">
+          <BarChart2 className="w-4 h-4 text-[#e6edf3] shrink-0" />
+          <h2 className="text-xs sm:text-sm font-semibold text-[#e6edf3] tracking-tight">
             SWE-bench Lite
           </h2>
         </div>
 
         {/* Scenario Selector */}
-        <div className="flex items-center gap-1 bg-[#0d1117] px-2 py-1 rounded-lg border border-[#30363d] text-[11px] font-mono">
+        <div className="flex items-center gap-1 bg-[#0d1117] px-2 py-1 rounded-lg border border-[#30363d] text-[11px] font-mono shrink-0 max-w-[180px]">
           <select
             value={activeScenario.id}
             onChange={(e) => setActiveScenario(SCENARIOS.find(s => s.id === e.target.value) || SCENARIOS[0])}
-            className="bg-transparent text-[#e6edf3] focus:outline-none cursor-pointer text-[11px]"
+            className="bg-transparent text-[#e6edf3] focus:outline-none cursor-pointer text-[11px] truncate max-w-full"
+            aria-label="Select benchmark scenario"
           >
             {SCENARIOS.map(s => (
               <option key={s.id} value={s.id} className="bg-[#161b22]">{s.name}</option>
@@ -78,16 +79,16 @@ export const SWEBenchCard: React.FC = () => {
         </div>
       </div>
 
-      <p className="text-[11px] text-[#8b949e] mt-0.5">
+      <p className="text-[11px] text-[#8b949e] shrink-0">
         Median execution cost (USD) — {activeScenario.name}
       </p>
 
       {/* ── Main Comparison Bars ── */}
-      <div className="space-y-2.5 my-2">
+      <div className="space-y-2.5 my-1 shrink-0">
         {/* 1. Baseline Bar */}
         <div className="space-y-0.5">
           <div className="flex items-center justify-between text-[11px]">
-            <span className="text-[#8b949e] font-medium">Claude Code baseline</span>
+            <span className="text-[#8b949e] font-medium truncate">Claude Code baseline</span>
             <span className="font-mono font-bold text-[#f85149] text-xs">${activeScenario.baseline.toFixed(3)}</span>
           </div>
 
@@ -102,7 +103,7 @@ export const SWEBenchCard: React.FC = () => {
         {/* 2. OmniGraph Studio Bar */}
         <div className="space-y-0.5">
           <div className="flex items-center justify-between text-[11px]">
-            <span className="text-[#8b949e] font-medium">OmniGraph Studio</span>
+            <span className="text-[#8b949e] font-medium truncate">OmniGraph Studio</span>
             <span className="font-mono font-bold text-[#3fb950] text-xs">${activeScenario.optimized.toFixed(3)}</span>
           </div>
 
@@ -116,17 +117,19 @@ export const SWEBenchCard: React.FC = () => {
       </div>
 
       {/* ── Test Assertion Checklist ── */}
-      <div className="space-y-1 my-1">
-        <span className="text-[10px] text-[#8b949e] font-medium uppercase tracking-wider">Test Assertions ({activeScenario.passRate} Passed)</span>
-        <div className="space-y-1 max-h-28 overflow-y-auto pr-1">
+      <div className="space-y-1 my-1 flex-1 min-h-[90px]">
+        <span className="text-[10px] text-[#8b949e] font-medium uppercase tracking-wider block">
+          Test Assertions ({activeScenario.passRate} Passed)
+        </span>
+        <div className="space-y-1 max-h-28 sm:max-h-36 overflow-y-auto pr-1 custom-scrollbar">
           {activeScenario.tests.map((t, i) => (
-            <div key={i} className="flex items-center gap-2 text-[11px]">
+            <div key={i} className="flex items-center gap-2 text-[11px] p-1 rounded bg-[#0d1117]/60 border border-[#21262d]">
               {t.pass ? (
-                <CheckCircle2 className="w-3 h-3 text-[#3fb950] shrink-0" />
+                <CheckCircle2 className="w-3.5 h-3.5 text-[#3fb950] shrink-0" />
               ) : (
-                <XCircle className="w-3 h-3 text-[#f85149] shrink-0" />
+                <XCircle className="w-3.5 h-3.5 text-[#f85149] shrink-0" />
               )}
-              <span className={t.pass ? 'text-[#e6edf3]' : 'text-[#f85149]'}>
+              <span className={`truncate ${t.pass ? 'text-[#e6edf3]' : 'text-[#f85149]'}`}>
                 {t.name}
               </span>
             </div>
@@ -135,13 +138,13 @@ export const SWEBenchCard: React.FC = () => {
       </div>
 
       {/* ── Savings Summary Box ── */}
-      <div className="pt-2 border-t border-[#30363d] flex items-center justify-between">
+      <div className="pt-2 border-t border-[#30363d] flex items-center justify-between shrink-0">
         <span className="text-xs font-medium text-[#e6edf3]">
-          Savings
+          Cost Savings
         </span>
 
         <div className="text-right">
-          <div className="text-base font-bold text-[#3fb950] font-mono leading-none">
+          <div className="text-base sm:text-lg font-bold text-[#3fb950] font-mono leading-none">
             {savingsPct}%
           </div>
           <span className="text-[10px] text-[#8b949e]">Lower median cost</span>

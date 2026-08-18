@@ -63,24 +63,24 @@ export const DiffViewer: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col h-full bg-[#161b22] text-[#e6edf3] font-sans overflow-hidden select-none">
+    <div className="flex flex-col h-full w-full bg-[#161b22] text-[#e6edf3] font-sans overflow-hidden select-none min-w-0">
       {/* ── Header ── */}
-      <div className="flex items-center justify-between px-5 py-3 border-b border-[#30363d]">
-        <div className="flex items-center gap-2.5">
-          <FileDiff className="w-4 h-4 text-[#e6edf3]" />
-          <h2 className="text-sm font-semibold text-[#e6edf3] tracking-tight">
+      <div className="flex flex-wrap items-center justify-between px-3 sm:px-5 py-2.5 sm:py-3 border-b border-[#30363d] gap-2 shrink-0">
+        <div className="flex items-center gap-2">
+          <FileDiff className="w-4 h-4 text-[#e6edf3] shrink-0" />
+          <h2 className="text-xs sm:text-sm font-semibold text-[#e6edf3] tracking-tight">
             Surgical Diff Picker
           </h2>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
           {/* File Selector Dropdown */}
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#0d1117] border border-[#30363d] text-xs font-mono">
-            <FileCode className="w-3 h-3 text-[#58a6ff]" />
+          <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-[#0d1117] border border-[#30363d] text-xs font-mono max-w-[180px] sm:max-w-[240px]">
+            <FileCode className="w-3 h-3 text-[#58a6ff] shrink-0" />
             <select
               value={selectedFile}
               onChange={(e) => setSelectedFile(e.target.value)}
-              className="bg-transparent text-[#e6edf3] text-[11px] focus:outline-none cursor-pointer"
+              className="bg-transparent text-[#e6edf3] text-[11px] focus:outline-none cursor-pointer truncate max-w-full"
             >
               <option value="all" className="bg-[#161b22]">All Files ({totalHunks} hunks)</option>
               {uniqueFiles.map(f => (
@@ -91,19 +91,19 @@ export const DiffViewer: React.FC = () => {
 
           {/* Human Review Required Pill */}
           {pendingCount > 0 && (
-            <div className="flex items-center gap-1.5 px-3 py-1 rounded-md bg-[#2e2316] border border-[#9e6a03] text-[#d29922] text-xs font-semibold">
-              <AlertTriangle className="w-3.5 h-3.5 text-[#d29922]" />
-              <span className="tracking-wide">{pendingCount} PENDING REVIEW</span>
+            <div className="flex items-center gap-1.5 px-2 sm:px-2.5 py-1 rounded-md bg-[#2e2316] border border-[#9e6a03] text-[#d29922] text-[10px] sm:text-xs font-semibold shrink-0">
+              <AlertTriangle className="w-3 h-3 text-[#d29922] shrink-0" />
+              <span className="tracking-wide">{pendingCount} PENDING</span>
             </div>
           )}
         </div>
       </div>
 
       {/* ── Progress Bar ── */}
-      <div className="px-5 pt-2 pb-1">
+      <div className="px-3 sm:px-5 pt-2 pb-1 shrink-0">
         <div className="flex items-center justify-between text-[10px] font-mono text-[#8b949e] mb-1">
           <span>Review Progress</span>
-          <span>{progressPct}% ({acceptedCount} accepted, {rejectedCount} rejected, {pendingCount} pending)</span>
+          <span>{progressPct}% ({acceptedCount}✓, {rejectedCount}✗, {pendingCount}?)</span>
         </div>
         <div className="h-1.5 w-full bg-[#0d1117] rounded-full overflow-hidden border border-[#30363d]">
           <div className="h-full flex">
@@ -120,9 +120,9 @@ export const DiffViewer: React.FC = () => {
       </div>
 
       {/* ── Main Scrollable Hunk List ── */}
-      <div className="flex-1 px-5 py-2 overflow-y-auto space-y-3 font-mono text-xs">
+      <div className="flex-1 px-2.5 sm:px-5 py-2 overflow-y-auto space-y-3 font-mono text-xs custom-scrollbar min-h-0">
         {visibleHunks.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-[#6e7681] space-y-2">
+          <div className="flex flex-col items-center justify-center h-full text-[#6e7681] space-y-2 p-4 text-center">
             <CheckCircle2 className="w-8 h-8 text-[#3fb950]" />
             <p className="text-sm font-medium text-[#3fb950]">All hunks reviewed!</p>
             <p className="text-[11px]">Click &quot;Apply Approved Patches&quot; to commit changes to source code.</p>
@@ -132,7 +132,6 @@ export const DiffViewer: React.FC = () => {
             const isCherryPick = cherryPickId === hunk.id;
             const deletions = hunk.lines.filter(l => l.type === 'deletion');
             const additions = hunk.lines.filter(l => l.type === 'addition');
-            const contextLines = hunk.lines.filter(l => l.type === 'context');
 
             return (
               <div
@@ -148,9 +147,9 @@ export const DiffViewer: React.FC = () => {
                 }`}
               >
                 {/* Hunk Header */}
-                <div className="flex items-center justify-between px-3 py-1.5 bg-[#21262d] border-b border-[#30363d] text-[11px]">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[#8b949e] font-medium">{hunk.file}</span>
+                <div className="flex flex-wrap items-center justify-between px-3 py-1.5 bg-[#21262d] border-b border-[#30363d] text-[11px] gap-1">
+                  <div className="flex items-center gap-2 flex-wrap min-w-0">
+                    <span className="text-[#8b949e] font-medium truncate max-w-[160px] sm:max-w-[240px]">{hunk.file}</span>
                     <span className="text-[#6e7681]">Hunk {idx + 1}</span>
                     <span className="text-[#f85149] text-[10px]">−{deletions.length}</span>
                     <span className="text-[#3fb950] text-[10px]">+{additions.length}</span>
@@ -164,11 +163,11 @@ export const DiffViewer: React.FC = () => {
                       </span>
                     )}
                   </div>
-                  <span className="text-[#6e7681] font-mono">{hunk.header}</span>
+                  <span className="text-[#6e7681] font-mono text-[10px] truncate">{hunk.header}</span>
                 </div>
 
                 {/* Unified Diff Lines */}
-                <div className="p-2.5 text-[11px] leading-relaxed space-y-0 select-text">
+                <div className="p-2 sm:p-2.5 text-[11px] leading-relaxed space-y-0.5 select-text overflow-x-auto custom-scrollbar">
                   {hunk.lines.map((line, li) => {
                     const lineNo = line.type === 'deletion'
                       ? line.oldLineNo
@@ -179,7 +178,7 @@ export const DiffViewer: React.FC = () => {
                     return (
                       <div
                         key={li}
-                        className={`flex gap-2 px-1 rounded-sm ${
+                        className={`flex gap-2 px-1 rounded-sm min-w-max ${
                           line.type === 'deletion'
                             ? 'bg-[#3c1e22]/40 text-[#f85149]'
                             : line.type === 'addition'
@@ -187,13 +186,13 @@ export const DiffViewer: React.FC = () => {
                             : 'text-[#8b949e]'
                         }`}
                       >
-                        <span className="w-8 text-right select-none text-[#6e7681] shrink-0 font-mono">
+                        <span className="w-7 text-right select-none text-[#6e7681] shrink-0 font-mono text-[10px]">
                           {lineNo ?? ''}
                         </span>
                         <span className="w-3 text-center select-none shrink-0 font-bold">
                           {line.type === 'deletion' ? '−' : line.type === 'addition' ? '+' : ' '}
                         </span>
-                        <span className="flex-1 whitespace-pre-wrap break-all">
+                        <span className="whitespace-pre font-mono">
                           {line.content || '\u00A0'}
                         </span>
                       </div>
@@ -210,10 +209,10 @@ export const DiffViewer: React.FC = () => {
 
                 {/* Hunk Action Buttons */}
                 {hunk.status === 'pending' && (
-                  <div className="flex items-center justify-end gap-2 px-3 py-2 bg-[#21262d] border-t border-[#30363d]">
+                  <div className="flex flex-wrap items-center justify-end gap-2 px-3 py-2 bg-[#21262d] border-t border-[#30363d]">
                     <button
                       onClick={() => handleAccept(hunk.id)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#1b3127] hover:bg-[#238636] text-[#3fb950] hover:text-white border border-[#238636] font-medium text-[11px] transition-all"
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#1b3127] hover:bg-[#238636] text-[#3fb950] hover:text-white border border-[#238636] font-medium text-[11px] transition-all min-h-[32px]"
                     >
                       <Check className="w-3.5 h-3.5" />
                       <span>Accept</span>
@@ -221,7 +220,7 @@ export const DiffViewer: React.FC = () => {
 
                     <button
                       onClick={() => handleReject(hunk.id)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#2d191e] hover:bg-[#da3633] text-[#f85149] hover:text-white border border-[#f85149]/60 font-medium text-[11px] transition-all"
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#2d191e] hover:bg-[#da3633] text-[#f85149] hover:text-white border border-[#f85149]/60 font-medium text-[11px] transition-all min-h-[32px]"
                     >
                       <X className="w-3.5 h-3.5" />
                       <span>Reject</span>
@@ -229,7 +228,7 @@ export const DiffViewer: React.FC = () => {
 
                     <button
                       onClick={() => setCherryPickId(isCherryPick ? null : hunk.id)}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border font-medium text-[11px] transition-all ${
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border font-medium text-[11px] transition-all min-h-[32px] ${
                         isCherryPick
                           ? 'bg-[#d29922]/20 text-[#d29922] border-[#d29922] shadow-[0_0_8px_rgba(210,153,34,0.3)]'
                           : 'bg-[#21262d] hover:bg-[#30363d] border-[#30363d] text-[#e6edf3]'
@@ -247,18 +246,18 @@ export const DiffViewer: React.FC = () => {
       </div>
 
       {/* ── Footer / Bulk Actions ── */}
-      <div className="mt-auto px-5 py-3 border-t border-[#30363d] bg-[#161b22] flex items-center justify-between">
-        <div className="text-xs font-mono">
+      <div className="mt-auto px-3 sm:px-5 py-2.5 sm:py-3 border-t border-[#30363d] bg-[#161b22] flex flex-wrap items-center justify-between gap-2 shrink-0">
+        <div className="text-[11px] sm:text-xs font-mono">
           <span className="text-[#e6edf3] font-medium block">
             {totalHunks} Hunks · {acceptedCount} Accepted · {rejectedCount} Rejected
           </span>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <button
             onClick={handleAcceptAll}
             disabled={pendingCount === 0}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#1b3127] hover:bg-[#238636] text-[#3fb950] hover:text-white border border-[#238636] font-medium text-xs transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg bg-[#1b3127] hover:bg-[#238636] text-[#3fb950] hover:text-white border border-[#238636] font-medium text-[11px] sm:text-xs transition-all disabled:opacity-40 disabled:cursor-not-allowed min-h-[34px]"
           >
             <CheckCircle2 className="w-3.5 h-3.5" />
             <span>Accept All</span>
@@ -267,7 +266,7 @@ export const DiffViewer: React.FC = () => {
           <button
             onClick={rejectAllHunks}
             disabled={pendingCount === 0}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#2d191e] hover:bg-[#da3633] text-[#f85149] hover:text-white border border-[#f85149]/60 font-medium text-xs transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg bg-[#2d191e] hover:bg-[#da3633] text-[#f85149] hover:text-white border border-[#f85149]/60 font-medium text-[11px] sm:text-xs transition-all disabled:opacity-40 disabled:cursor-not-allowed min-h-[34px]"
           >
             <XCircle className="w-3.5 h-3.5" />
             <span>Reject All</span>
@@ -276,10 +275,10 @@ export const DiffViewer: React.FC = () => {
           {acceptedCount > 0 && (
             <button
               onClick={handleApplyPatches}
-              className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-[#58a6ff] hover:bg-[#79c0ff] text-[#0d1117] font-bold text-xs transition-all shadow-[0_0_12px_rgba(88,166,255,0.4)]"
+              className="flex items-center gap-1.5 px-3 sm:px-4 py-1.5 rounded-lg bg-[#58a6ff] hover:bg-[#79c0ff] text-[#0d1117] font-bold text-[11px] sm:text-xs transition-all shadow-[0_0_12px_rgba(88,166,255,0.4)] min-h-[34px]"
             >
               <Check className="w-3.5 h-3.5" />
-              <span>Apply Approved Patches</span>
+              <span>Apply Patches</span>
             </button>
           )}
         </div>

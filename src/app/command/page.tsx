@@ -82,34 +82,36 @@ export default function CommandPage() {
   );
 
   return (
-    <div className="flex flex-col h-full w-full bg-[#0d1117] text-[#e6edf3] p-4 font-sans select-none space-y-4 overflow-y-auto">
+    <div className="flex flex-col h-full w-full bg-[#0d1117] text-[#e6edf3] p-2.5 sm:p-4 font-sans select-none space-y-3 sm:space-y-4 overflow-y-auto custom-scrollbar min-w-0">
       {/* Header */}
-      <div className="h-9 flex items-center justify-between px-3 bg-[#161b22] border border-[#30363d] rounded-xl font-mono text-xs shrink-0">
-        <div className="flex items-center gap-2">
-          <Terminal className="w-4 h-4 text-[#58a6ff]" />
-          <h1 className="font-bold text-[#e6edf3]">Command Center (⌘K) & AST Traversal Matrix</h1>
-          <span className="text-[10px] text-[#8b949e]">Screen 7</span>
+      <div className="min-h-9 py-1.5 sm:py-0 flex flex-wrap items-center justify-between px-2.5 sm:px-3 bg-[#161b22] border border-[#30363d] rounded-xl font-mono text-xs shrink-0 gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <Terminal className="w-4 h-4 text-[#58a6ff] shrink-0" />
+          <h1 className="font-bold text-[#e6edf3] truncate text-xs sm:text-xs">
+            Command Center (⌘K) & AST Traversal Matrix
+          </h1>
+          <span className="text-[10px] text-[#8b949e] hidden sm:inline shrink-0">Screen 7</span>
         </div>
-        <span className="text-[10px] text-[#6e7681] font-mono">Press ⌘K / Ctrl+K to focus</span>
+        <span className="text-[10px] text-[#6e7681] font-mono hidden xs:inline shrink-0">Press ⌘K to focus</span>
       </div>
 
       {/* Main Search Input */}
-      <div className="relative">
-        <Search className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-[#8b949e]" />
+      <div className="relative shrink-0">
+        <Search className="w-4 h-4 sm:w-5 sm:h-5 absolute left-3.5 sm:left-4 top-1/2 -translate-y-1/2 text-[#8b949e]" />
         <input
           id="command-search-input"
           type="text"
           placeholder="Type a command or search .og AST symbols, functions, or files..."
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          className="w-full bg-[#161b22] border-2 border-[#30363d] focus:border-[#58a6ff] rounded-xl py-3 pl-12 pr-4 text-sm font-mono text-[#e6edf3] placeholder-[#6e7681] focus:outline-none transition-colors shadow-2xl"
+          className="w-full bg-[#161b22] border-2 border-[#30363d] focus:border-[#58a6ff] rounded-xl py-2.5 sm:py-3 pl-10 sm:pl-12 pr-4 text-xs sm:text-sm font-mono text-[#e6edf3] placeholder-[#6e7681] focus:outline-none transition-colors shadow-2xl"
         />
       </div>
 
       {/* Commands Grid & AST Node Results */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 font-mono text-xs">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4 font-mono text-xs">
         {/* Left: Quick Actions */}
-        <div className="p-4 rounded-xl bg-[#161b22] border border-[#30363d] space-y-3">
+        <div className="p-3 sm:p-4 rounded-xl bg-[#161b22] border border-[#30363d] space-y-3 shadow-xl">
           <h2 className="text-xs font-bold uppercase text-[#8b949e] tracking-wider">
             System Commands & Shortcuts ({filteredCommands.length})
           </h2>
@@ -121,21 +123,21 @@ export default function CommandPage() {
                 <div
                   key={i}
                   onClick={() => executeCommand(c.action)}
-                  className={`flex items-center justify-between p-2.5 rounded-lg border cursor-pointer transition-all ${
+                  className={`flex items-center justify-between p-2.5 rounded-lg border cursor-pointer transition-all gap-2 ${
                     isExecuted
                       ? 'bg-[#16291e] border-[#238636] shadow-[0_0_12px_rgba(63,185,80,0.3)]'
                       : 'bg-[#0d1117] border-[#30363d] hover:border-[#58a6ff] hover:shadow-[0_0_8px_rgba(88,166,255,0.15)]'
                   }`}
                 >
-                  <div className="flex items-center gap-2">
-                    <Icon className="w-3.5 h-3.5" style={{ color: c.color }} />
-                    <span className="px-2 py-0.5 rounded bg-[#21262d] font-bold text-[10px]" style={{ color: c.color }}>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Icon className="w-3.5 h-3.5 shrink-0" style={{ color: c.color }} />
+                    <span className="px-2 py-0.5 rounded bg-[#21262d] font-bold text-[10px] shrink-0" style={{ color: c.color }}>
                       {c.cmd}
                     </span>
-                    <span className="text-[#e6edf3] text-xs">{c.desc}</span>
+                    <span className="text-[#e6edf3] text-xs truncate">{c.desc}</span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] text-[#6e7681]">{c.category}</span>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-[10px] text-[#6e7681] hidden sm:inline">{c.category}</span>
                     {isExecuted && <CheckCircle2 className="w-3.5 h-3.5 text-[#3fb950]" />}
                   </div>
                 </div>
@@ -145,27 +147,27 @@ export default function CommandPage() {
         </div>
 
         {/* Right: AST Symbol Search Results */}
-        <div className="p-4 rounded-xl bg-[#161b22] border border-[#30363d] space-y-3">
+        <div className="p-3 sm:p-4 rounded-xl bg-[#161b22] border border-[#30363d] space-y-3 shadow-xl">
           <h2 className="text-xs font-bold uppercase text-[#8b949e] tracking-wider">
             Indexed ObjectGraph (.og) AST Nodes ({filteredNodes.length})
           </h2>
-          <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+          <div className="space-y-2 max-h-80 sm:max-h-96 overflow-y-auto pr-1 custom-scrollbar">
             {filteredNodes.map(n => (
               <div
                 key={n.id}
                 onClick={() => handleNodeClick(n.id)}
                 className="p-2.5 rounded-lg bg-[#0d1117] border border-[#30363d] space-y-1 cursor-pointer hover:border-[#58a6ff] hover:shadow-[0_0_8px_rgba(88,166,255,0.15)] transition-all group"
               >
-                <div className="flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-[#58a6ff]">{n.label}</span>
-                    <ExternalLink className="w-3 h-3 text-[#6e7681] opacity-0 group-hover:opacity-100 transition-opacity" />
+                <div className="flex items-center justify-between text-xs gap-2">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="font-bold text-[#58a6ff] truncate">{n.label}</span>
+                    <ExternalLink className="w-3 h-3 text-[#6e7681] opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
                   </div>
-                  <span className="text-[10px] text-[#3fb950] bg-[#16291e] px-1.5 py-0.5 rounded border border-[#238636]">
+                  <span className="text-[10px] text-[#3fb950] bg-[#16291e] px-1.5 py-0.5 rounded border border-[#238636] shrink-0">
                     {n.tokenCount} tokens
                   </span>
                 </div>
-                <div className="text-[10px] text-[#8b949e] font-mono">{n.path}</div>
+                <div className="text-[10px] text-[#8b949e] font-mono truncate">{n.path}</div>
               </div>
             ))}
           </div>
