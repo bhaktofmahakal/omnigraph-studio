@@ -198,10 +198,10 @@ export const useOmniStore = create<OmniStoreState>((set, get) => ({
   activePathEdgeIds: [],
   selectNode: (nodeId: string | null) => set({ selectedNodeId: nodeId }),
   addNode: (newNode: OGNodeData) => set((state) => ({ nodes: [...state.nodes, newNode] })),
-  toggleNodeExpansion: (nodeId: string) => {
-    const { nodes, edges } = get();
+  toggleNodeExpansion: async (nodeId: string) => {
+    // 1. Optimistic local expansion
+    const { nodes, edges, activeScenarioId } = get();
     const { updatedNodes, updatedEdges } = expandNodeProgressive(nodeId, nodes, edges);
-    const metrics = calculateGraphTokenMetrics(updatedNodes);
     set({
       nodes: updatedNodes,
       edges: updatedEdges,
@@ -211,6 +211,33 @@ export const useOmniStore = create<OmniStoreState>((set, get) => ({
         activeGraphNodes: updatedNodes.filter(n => n.isLoaded).length,
       }
     });
+
+    // 2. Real Backend API Call to Next.js API Route
+    try {
+      const res = await fetch('/api/graph/traverse', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scenarioId: activeScenarioId, targetNodeId: nodeId }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.status === 'success' && data.nodes) {
+          set({
+            nodes: data.nodes,
+            edges: data.edges,
+            telemetry: {
+              ...get().telemetry,
+              totalGraphNodes: data.metrics.totalNodes,
+              activeGraphNodes: data.metrics.disclosedNodes,
+              tokensSaved: data.metrics.tokensSaved,
+              savingsPercentage: data.metrics.savingsPercentage,
+            }
+          });
+        }
+      }
+    } catch {
+      // Local optimistic fallback remains intact
+    }
   },
   setSearchQuery: (searchQuery: string) => set({ searchQuery }),
   resetGraph: () => {
@@ -235,6 +262,12 @@ export const useOmniStore = create<OmniStoreState>((set, get) => ({
     if (get().isAgentRunning) return;
     set({ isAgentRunning: true });
 
+    // Retrieve client BYOK keys if configured
+    const orcaKey = typeof window !== 'undefined' ? localStorage.getItem('omnigraph_orca_key') || '' : '';
+    const groqKey = typeof window !== 'undefined' ? localStorage.getItem('omnigraph_groq_key') || '' : '';
+    const effectiveKey = orcaKey || groqKey;
+    const preferredModel = typeof window !== 'undefined' ? localStorage.getItem('omnigraph_orca_model') || 'openai/gpt-4o-mini' : 'openai/gpt-4o-mini';
+
     const steps = DJANGO_SCENARIO_STEPS;
     let accumulatedTokens = get().telemetry.totalInputTokens;
 
@@ -244,7 +277,7 @@ export const useOmniStore = create<OmniStoreState>((set, get) => ({
       const step = steps[i];
       const speed = get().playbackSpeed;
 
-      // Update Phase angle and activate agent
+      // Update Phase angle and activate agent in state
       set({
         currentStepIndex: i,
         activeAgentId: step.agentId,
@@ -257,6 +290,23 @@ export const useOmniStore = create<OmniStoreState>((set, get) => ({
         activePathEdgeIds: step.highlightEdgeIds || [],
         activeFileTab: step.activeFileTab || get().activeFileTab,
       });
+
+      // Real Backend API Call to /api/agents/psmas-run
+      try {
+        const targetNodeId = step.logs.find(l => l.subgraphNodeId)?.subgraphNodeId;
+        const activeNode = (targetNodeId ? get().nodes.find(n => n.id === targetNodeId) : null) || get().nodes[0];
+        fetch('/api/agents/psmas-run', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            activeAgent: step.agentId,
+            nodeContext: activeNode,
+            apiKey: effectiveKey,
+            model: preferredModel,
+            prompt: `Execute ${step.agentId.toUpperCase()} phase at angle theta = ${step.angleDeg} deg on AST node ${activeNode?.label || 'root'}`,
+          }),
+        }).catch(() => {});
+      } catch {}
 
       // Stream logs for this step
       for (const logItem of step.logs) {
