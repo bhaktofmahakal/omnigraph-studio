@@ -15,7 +15,7 @@ export async function GET() {
   return NextResponse.json({
     status: 'success',
     engine: 'PSMAS Circular Manifold Engine v1.0',
-    gateway: 'OrcaRouter AI Gateway (200+ LLMs Behind One API)',
+    gateway: 'OrcaRouter AI Gateway + Groq Cloud',
     manifold: {
       domain: 'S^1 (0 to 2pi)',
       epsilonAttentionWindow: 0.785, // pi/4
@@ -41,7 +41,15 @@ export async function POST(req: Request) {
     } = body;
 
     const agentRole = activeAgent.toLowerCase();
-    const effectiveApiKey = apiKey || process.env.ORCAROUTER_API_KEY || process.env.GROQ_API_KEY;
+    const selectedModel = model || AGENT_MODEL_MAP[agentRole] || 'openai/gpt-4o-mini';
+
+    // Determine target provider (Groq vs OrcaRouter)
+    const isGroqModel = selectedModel.startsWith('groq/') || selectedModel.includes('llama') || selectedModel.includes('mixtral');
+    const isGroqKey = apiKey && apiKey.startsWith('gsk_');
+
+    const shouldUseGroq = isGroqModel || isGroqKey || (!process.env.ORCAROUTER_API_KEY && Boolean(process.env.GROQ_API_KEY));
+
+    const effectiveApiKey = apiKey || (shouldUseGroq ? process.env.GROQ_API_KEY : process.env.ORCAROUTER_API_KEY) || process.env.GROQ_API_KEY;
 
     const systemPrompts: Record<string, string> = {
       architect: `You are the Architect Agent (theta_1 = 0) in the PSMAS Multi-Agent Engine. Analyze AST dependencies, identify critical call sites, and emit structured traversal paths. Target AST Node: ${JSON.stringify(nodeContext || {})}`,
@@ -51,17 +59,20 @@ export async function POST(req: Request) {
     };
 
     const systemPrompt = systemPrompts[agentRole] || systemPrompts.architect;
-    const selectedModel = model || AGENT_MODEL_MAP[agentRole] || 'openai/gpt-4o-mini';
 
-    // If an API Key is available, stream real LLM tokens via OrcaRouter Gateway / Groq
+    // If an API Key is available, stream real LLM tokens via Groq Cloud or OrcaRouter Gateway
     if (effectiveApiKey) {
       const encoder = new TextEncoder();
-      const isGroqKey = effectiveApiKey.startsWith('gsk_');
-      const endpoint = isGroqKey
-        ? 'https://api.groq.com/openai/v1/chat/completions'
-        : 'https://api.orcarouter.ai/v1/chat/completions';
-      
-      const targetModel = isGroqKey ? 'llama-3.3-70b-versatile' : selectedModel;
+
+      // Configure endpoint & model name
+      let endpoint = 'https://api.orcarouter.ai/v1/chat/completions';
+      let targetModel = selectedModel;
+
+      if (shouldUseGroq || (effectiveApiKey && effectiveApiKey.startsWith('gsk_'))) {
+        endpoint = 'https://api.groq.com/openai/v1/chat/completions';
+        // Strip 'groq/' prefix for Groq direct API if present
+        targetModel = selectedModel.replace(/^groq\//, '') || 'llama-3.3-70b-versatile';
+      }
 
       const stream = new ReadableStream({
         async start(controller) {
@@ -99,11 +110,9 @@ export async function POST(req: Request) {
               const chunk = decoder.decode(value);
               controller.enqueue(encoder.encode(chunk));
             }
-
-            controller.enqueue(encoder.encode('\ndata: [DONE]\n\n'));
             controller.close();
-          } catch (err) {
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: String(err) })}\n\n`));
+          } catch (streamErr) {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: String(streamErr) })}\n\n`));
             controller.close();
           }
         },
@@ -118,23 +127,19 @@ export async function POST(req: Request) {
       });
     }
 
-    // High-fidelity fallback response when credentials are being set up
+    // Fallback response if no key is configured
     return NextResponse.json({
-      success: true,
+      status: 'simulated_success',
       agent: activeAgent,
-      phaseAngle: agentRole === 'architect' ? 0 : agentRole === 'codewriter' ? 1.57 : agentRole === 'testrunner' ? 3.14 : 4.71,
-      systemPrompt,
+      model: selectedModel,
       response: {
-        thought: `[${activeAgent.toUpperCase()}] Evaluated AST node with ${nodeContext?.tokenCount || 420} tokens. Compressed to ${nodeContext?.compressedTokens || 84} tokens via TokenFold.`,
-        action: agentRole === 'codewriter' ? 'GENERATE_SURGICAL_HUNK' : 'AST_TRAVERSE',
-        tokensSaved: 18420,
-        compressionRatio: '4.8x',
-        status: 'completed',
+        thought: `[Managed Engine Active] Evaluated AST node ${nodeContext?.label || 'root'} along phase manifold. Token reduction achieved.`,
+        action: `Traversed ${nodeContext?.path || 'src/main.ts'} and queued next agent.`,
       },
     });
-  } catch (error) {
+  } catch (err) {
     return NextResponse.json(
-      { error: 'Failed to execute PSMAS agent stream', details: String(error) },
+      { error: 'PSMAS Engine Execution Failed', details: String(err) },
       { status: 500 }
     );
   }

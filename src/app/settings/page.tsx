@@ -13,11 +13,7 @@ import {
   Trash2,
   Globe,
   Zap,
-  Sparkles,
   Server,
-  ToggleLeft,
-  ToggleRight,
-  Info,
 } from 'lucide-react';
 
 type ConnectionStatus = 'idle' | 'testing' | 'connected' | 'failed';
@@ -26,7 +22,7 @@ export default function SettingsPage() {
   const [providerMode, setProviderMode] = useState<'platform' | 'byok'>('platform');
   const [orcaKey, setOrcaKey] = useState('');
   const [orcaBaseUrl, setOrcaBaseUrl] = useState('https://api.orcarouter.ai/v1');
-  const [orcaModel, setOrcaModel] = useState('openai/gpt-4o-mini');
+  const [orcaModel, setOrcaModel] = useState('groq/llama-3.3-70b-versatile');
   const [groqKey, setGroqKey] = useState('');
   const [saved, setSaved] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('idle');
@@ -67,7 +63,7 @@ export default function SettingsPage() {
     setProviderMode('platform');
     setOrcaKey('');
     setOrcaBaseUrl('https://api.orcarouter.ai/v1');
-    setOrcaModel('openai/gpt-4o-mini');
+    setOrcaModel('groq/llama-3.3-70b-versatile');
     setGroqKey('');
     setConnectionStatus('idle');
     setConnectionLatency(null);
@@ -145,7 +141,7 @@ export default function SettingsPage() {
             )}
           </div>
           <p className="text-[11px] text-[#8b949e] mt-1.5">
-            Zero configuration needed. Runs directly via server-side credentials with 200+ models.
+            Zero configuration needed. Runs directly via server credentials (OrcaRouter + Groq).
           </p>
         </div>
 
@@ -180,19 +176,32 @@ export default function SettingsPage() {
       <div className="p-4 sm:p-6 rounded-xl bg-[#161b22] border border-[#30363d] shadow-2xl max-w-2xl w-full space-y-4 sm:space-y-5 font-mono text-xs">
         {/* Managed Platform Mode Explanation */}
         {providerMode === 'platform' ? (
-          <div className="p-3 bg-[#0d1117] border border-[#30363d] rounded-xl space-y-2">
-            <div className="flex items-center gap-2 text-[#3fb950] font-bold">
-              <Check className="w-4 h-4" />
-              <span>In-Built Server AI Gateway is Live & Connected</span>
+          <div className="p-3.5 bg-[#0d1117] border border-[#30363d] rounded-xl space-y-2.5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-[#3fb950] font-bold">
+                <Check className="w-4 h-4" />
+                <span>In-Built Server AI Gateways Live & Active</span>
+              </div>
+              <span className="text-[10px] text-[#8b949e] bg-[#161b22] px-2 py-0.5 rounded border border-[#30363d]">
+                .env.local / Vercel Edge
+              </span>
             </div>
             <p className="text-[11px] text-[#8b949e] leading-relaxed">
-              The platform is using the pre-configured server environment variables (<code className="bg-[#161b22] px-1 rounded text-zinc-300">.env.local</code> / Vercel Edge).
-              All 4 PSMAS multi-agent roles (Architect, CodeWriter, TestRunner, SecurityReviewer) are fully functional without entering any client keys.
+              Both <span className="text-[#d29922] font-semibold">Groq Cloud</span> (Ultra-Fast Inference) and <span className="text-[#58a6ff] font-semibold">OrcaRouter</span> (200+ Models) are fully configured server-side.
+              Select any target model below and click <strong>Test Connection</strong>.
             </p>
             <div className="flex flex-wrap gap-1.5 pt-1">
-              {['GPT-4o', 'Claude 3.5 Sonnet', 'Gemini 2.5 Flash', 'DeepSeek-V3', 'Groq Llama 3.3'].map((m, i) => (
-                <span key={i} className="text-[10px] px-2 py-0.5 rounded-full bg-[#161b22] border border-[#30363d] text-[#e6edf3]">
-                  {m}
+              {[
+                { name: 'Groq Llama 3.3 70B', color: 'text-[#d29922]' },
+                { name: 'Groq Llama 3.1 8B', color: 'text-[#d29922]' },
+                { name: 'GPT-4o Mini', color: 'text-[#3fb950]' },
+                { name: 'GPT-4o', color: 'text-[#3fb950]' },
+                { name: 'Claude 3.5 Sonnet', color: 'text-[#58a6ff]' },
+                { name: 'Gemini 2.5 Flash', color: 'text-[#bc8cff]' },
+                { name: 'DeepSeek-V3', color: 'text-[#58a6ff]' },
+              ].map((m, i) => (
+                <span key={i} className={`text-[10px] px-2 py-0.5 rounded-full bg-[#161b22] border border-[#30363d] ${m.color} font-medium`}>
+                  {m.name}
                 </span>
               ))}
             </div>
@@ -210,11 +219,26 @@ export default function SettingsPage() {
         <div className="space-y-3.5 pt-2">
           {providerMode === 'byok' && (
             <>
+              {/* Groq API Key */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-[#8b949e] flex items-center gap-2">
+                  <Zap className="w-3.5 h-3.5 text-[#d29922] shrink-0" />
+                  <span>Groq API Key (Ultra-Fast Llama 3.3 / Mixtral Inference)</span>
+                </label>
+                <input
+                  type="password"
+                  placeholder="gsk_..."
+                  value={groqKey}
+                  onChange={(e) => setGroqKey(e.target.value)}
+                  className="w-full bg-[#0d1117] border border-[#30363d] focus:border-[#d29922] rounded-lg p-2.5 text-xs text-[#e6edf3] focus:outline-none transition-colors"
+                />
+              </div>
+
               {/* OrcaRouter API Key */}
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-[#8b949e] flex items-center gap-2">
                   <Key className="w-3.5 h-3.5 text-[#58a6ff] shrink-0" />
-                  <span>OrcaRouter API Key (Unified 200+ Models)</span>
+                  <span>OrcaRouter API Key (Unified 200+ LLMs Behind 1 Key)</span>
                 </label>
                 <input
                   type="password"
@@ -239,25 +263,10 @@ export default function SettingsPage() {
                   className="w-full bg-[#0d1117] border border-[#30363d] focus:border-[#58a6ff] rounded-lg p-2.5 text-xs text-[#e6edf3] focus:outline-none transition-colors"
                 />
               </div>
-
-              {/* Groq API Key */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-[#8b949e] flex items-center gap-2">
-                  <Zap className="w-3.5 h-3.5 text-[#d29922] shrink-0" />
-                  <span>Groq API Key (Ultra-Fast Inference)</span>
-                </label>
-                <input
-                  type="password"
-                  placeholder="gsk_..."
-                  value={groqKey}
-                  onChange={(e) => setGroqKey(e.target.value)}
-                  className="w-full bg-[#0d1117] border border-[#30363d] focus:border-[#58a6ff] rounded-lg p-2.5 text-xs text-[#e6edf3] focus:outline-none transition-colors"
-                />
-              </div>
             </>
           )}
 
-          {/* Model Selector */}
+          {/* Model Selector with Optgroups */}
           <div className="space-y-1.5">
             <label className="text-xs font-semibold text-[#8b949e] flex items-center gap-2">
               <Cpu className="w-3.5 h-3.5 text-[#bc8cff] shrink-0" />
@@ -268,11 +277,41 @@ export default function SettingsPage() {
               onChange={(e) => setOrcaModel(e.target.value)}
               className="w-full bg-[#0d1117] border border-[#30363d] focus:border-[#58a6ff] rounded-lg p-2.5 text-xs text-[#e6edf3] focus:outline-none cursor-pointer"
             >
-              <option value="openai/gpt-4o-mini">openai/gpt-4o-mini (Default Fast)</option>
-              <option value="openai/gpt-4o">openai/gpt-4o (Deep Reasoning)</option>
-              <option value="google/gemini-2.5-flash">google/gemini-2.5-flash (High Speed)</option>
-              <option value="deepseek/deepseek-chat">deepseek/deepseek-chat (Code Logic)</option>
-              <option value="auto">auto (OrcaRouter Optimal Routing)</option>
+              <optgroup label="⚡ Groq Cloud (Ultra-Fast LPU Inference)" className="bg-[#161b22] text-[#d29922] font-bold">
+                <option value="groq/llama-3.3-70b-versatile" className="bg-[#161b22] text-[#e6edf3]">
+                  ⚡ groq/llama-3.3-70b-versatile (Recommended - Sub-50ms)
+                </option>
+                <option value="groq/llama-3.1-8b-instant" className="bg-[#161b22] text-[#e6edf3]">
+                  ⚡ groq/llama-3.1-8b-instant (Ultra Instant)
+                </option>
+                <option value="groq/deepseek-r1-distill-llama-70b" className="bg-[#161b22] text-[#e6edf3]">
+                  ⚡ groq/deepseek-r1-distill-llama-70b (Reasoning)
+                </option>
+                <option value="groq/mixtral-8x7b-32768" className="bg-[#161b22] text-[#e6edf3]">
+                  ⚡ groq/mixtral-8x7b-32768 (32k Context)
+                </option>
+              </optgroup>
+
+              <optgroup label="🌐 OrcaRouter Universal Gateway (200+ Models)" className="bg-[#161b22] text-[#58a6ff] font-bold">
+                <option value="openai/gpt-4o-mini" className="bg-[#161b22] text-[#e6edf3]">
+                  openai/gpt-4o-mini (Default Fast)
+                </option>
+                <option value="openai/gpt-4o" className="bg-[#161b22] text-[#e6edf3]">
+                  openai/gpt-4o (Deep Reasoning)
+                </option>
+                <option value="anthropic/claude-3.5-sonnet" className="bg-[#161b22] text-[#e6edf3]">
+                  anthropic/claude-3.5-sonnet (Code Architecture)
+                </option>
+                <option value="google/gemini-2.5-flash" className="bg-[#161b22] text-[#e6edf3]">
+                  google/gemini-2.5-flash (Fast Multimodal)
+                </option>
+                <option value="deepseek/deepseek-chat" className="bg-[#161b22] text-[#e6edf3]">
+                  deepseek/deepseek-chat (DeepSeek-V3)
+                </option>
+                <option value="auto" className="bg-[#161b22] text-[#e6edf3]">
+                  auto (OrcaRouter Dynamic Routing)
+                </option>
+              </optgroup>
             </select>
           </div>
         </div>
@@ -294,7 +333,7 @@ export default function SettingsPage() {
               {connectionStatus === 'failed' && <WifiOff className="w-3.5 h-3.5 shrink-0" />}
               <span className="font-bold truncate">
                 {connectionStatus === 'testing' && 'Testing AI Gateway connection...'}
-                {connectionStatus === 'connected' && `✓ Gateway Connection Active (${connectionLatency}ms latency)`}
+                {connectionStatus === 'connected' && `✓ Active: Model "${orcaModel}" responding with ${connectionLatency}ms latency`}
                 {connectionStatus === 'failed' && `✗ Connection Failed`}
               </span>
             </div>
