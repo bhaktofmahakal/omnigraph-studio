@@ -91,6 +91,9 @@ interface OmniStoreState {
   // Multiplayer Collaborators
   collaborators: Collaborator[];
   updateCollaboratorCursor: (id: string, x: number, y: number, nodeId?: string) => void;
+  addCollaborator: (collab: Collaborator) => void;
+  removeCollaborator: (id: string) => void;
+  updateUserProfile: (name: string, role: string) => void;
 }
 
 const initialScenario = SCENARIOS[0];
@@ -112,11 +115,11 @@ const initialFiles: PatchFile[] = initialScenario.files.map(f => ({
 const initialTokenMetrics = calculateGraphTokenMetrics(initialScenario.initialNodes);
 
 const initialTelemetry: TelemetryMetrics = {
-  totalInputTokens: 3820,
-  totalOutputTokens: 1450,
-  linearBaselineTokens: 265400,
-  tokensSaved: 171280,
-  savingsPercentage: 64.5,
+  totalInputTokens: 18450,
+  totalOutputTokens: 6240,
+  tokensSaved: 48920,
+  savingsPercentage: 72.4,
+  linearBaselineTokens: 73610,
   currentCostUSD: 0.065,
   baselineCostUSD: 0.104,
   activeGraphNodes: 4,
@@ -128,30 +131,30 @@ const initialTelemetry: TelemetryMetrics = {
 const INITIAL_COLLABORATORS: Collaborator[] = [
   {
     id: 'collab-1',
-    name: 'Mohit (Founder)',
+    name: 'Alex (Staff Architect)',
     role: 'Staff Architect',
     color: '#818CF8', // Indigo
-    avatar: 'MD',
+    avatar: 'AL',
     cursor: { x: 380, y: 190, nodeId: 'file-auth-ts' },
     activeNodeId: 'file-auth-ts',
     status: 'reviewing'
   },
   {
     id: 'collab-2',
-    name: 'Premraj (Founder)',
-    role: 'Systems Lead',
+    name: 'Sarah (Security Lead)',
+    role: 'Security Engineer',
     color: '#34D399', // Emerald
-    avatar: 'PK',
+    avatar: 'SL',
     cursor: { x: 580, y: 320, nodeId: 'file-jwt-ts' },
     activeNodeId: 'file-jwt-ts',
     status: 'editing'
   },
   {
     id: 'collab-3',
-    name: 'Candidate (You)',
-    role: 'Founding AI Engineer',
+    name: 'You (Lead Engineer)',
+    role: 'Lead AI Engineer',
     color: '#38BDF8', // Cyan
-    avatar: 'AI',
+    avatar: 'ME',
     cursor: { x: 420, y: 280 },
     status: 'online'
   }
@@ -691,6 +694,16 @@ export const useOmniStore = create<OmniStoreState>((set, get) => ({
     set(state => ({
       collaborators: state.collaborators.map(c =>
         c.id === id ? { ...c, cursor: { x, y, nodeId }, activeNodeId: nodeId } : c
+      )
+    })),
+  addCollaborator: (collab: Collaborator) =>
+    set(state => ({ collaborators: [...state.collaborators, collab] })),
+  removeCollaborator: (id: string) =>
+    set(state => ({ collaborators: state.collaborators.filter(c => c.id !== id) })),
+  updateUserProfile: (name: string, role: string) =>
+    set(state => ({
+      collaborators: state.collaborators.map(c =>
+        c.id === 'collab-3' ? { ...c, name, role } : c
       )
     })),
 }));
