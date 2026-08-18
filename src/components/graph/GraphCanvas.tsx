@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useCallback, useState } from 'react';
+import React, { useMemo, useCallback, useState, useEffect } from 'react';
 import {
   ReactFlow,
   Background,
@@ -13,6 +13,8 @@ import {
   addEdge,
   useReactFlow,
   ReactFlowProvider,
+  useNodesState,
+  useEdgesState,
 } from '@xyflow/react';
 import { ModuleNode } from './ModuleNode';
 import { FileNode } from './FileNode';
@@ -33,7 +35,7 @@ import {
   Layers,
   Info,
   Play,
-  Trash2,
+  Move,
 } from 'lucide-react';
 
 const nodeTypes = {
@@ -44,14 +46,14 @@ const nodeTypes = {
 };
 
 const INITIAL_NODE_POSITIONS: Record<string, { x: number; y: number }> = {
-  'mod-auth': { x: 320, y: 40 },
-  'file-auth-ts': { x: 80, y: 190 },
-  'file-jwt-ts': { x: 330, y: 190 },
-  'file-session-ts': { x: 580, y: 190 },
-  'file-auth-test-ts': { x: 830, y: 190 },
-  'fn-authenticate': { x: 80, y: 360 },
-  'fn-verifyjwt': { x: 330, y: 360 },
-  'assert-session-bleed': { x: 830, y: 360 },
+  'mod-auth': { x: 380, y: 50 },
+  'file-auth-ts': { x: 100, y: 220 },
+  'file-jwt-ts': { x: 380, y: 220 },
+  'file-session-ts': { x: 660, y: 220 },
+  'file-auth-test-ts': { x: 940, y: 220 },
+  'fn-authenticate': { x: 100, y: 400 },
+  'fn-verifyjwt': { x: 380, y: 400 },
+  'assert-session-bleed': { x: 940, y: 400 },
 };
 
 function GraphCanvasInner() {
@@ -72,63 +74,90 @@ function GraphCanvasInner() {
 
   const { zoomIn, zoomOut, fitView, screenToFlowPosition } = useReactFlow();
 
-  // Transform store nodes to ReactFlow nodes
-  const [nodes, setNodes] = useState<Node[]>(() =>
-    nodesData.map((n, idx) => ({
+  // Create initial flow nodes with dragging coordinates
+  const initialFlowNodes: Node[] = useMemo(() => {
+    return nodesData.map((n, idx) => ({
       id: n.id,
       type: n.type,
       position: INITIAL_NODE_POSITIONS[n.id] || {
-        x: 100 + (idx % 3) * 260,
-        y: 100 + Math.floor(idx / 3) * 160,
+        x: 100 + (idx % 3) * 280,
+        y: 100 + Math.floor(idx / 3) * 180,
       },
       data: n,
-    }))
-  );
+      selected: selectedNodeId === n.id,
+      draggable: true,
+    }));
+  }, [nodesData, selectedNodeId]);
 
-  const [edges, setEdges] = useState<Edge[]>(() =>
-    edgesData.map((e) => ({
+  const initialFlowEdges: Edge[] = useMemo(() => {
+    return edgesData.map((e) => ({
       id: e.id,
       source: e.source,
       target: e.target,
       type: 'smoothstep',
       animated: activePathEdgeIds.includes(e.id),
-      style: { stroke: '#38bdf8', strokeWidth: 1.5 },
-    }))
-  );
+      style: {
+        stroke: activePathEdgeIds.includes(e.id) ? '#38bdf8' : '#30363d',
+        strokeWidth: activePathEdgeIds.includes(e.id) ? 2.5 : 1.5,
+      },
+    }));
+  }, [edgesData, activePathEdgeIds]);
 
-  // Sync with store on updates
-  React.useEffect(() => {
-    setNodes((prevNodes) =>
-      nodesData.map((n, idx) => {
+  // Use official xyflow hooks to guarantee 100% interactive drag and drop
+  const [nodes, setNodes, onNodesChange] = useNodesState(initialFlowNodes);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(initialFlowEdges);
+
+  // Synchronize when store node count or selection changes
+  useEffect(() => {
+    setNodes((prevNodes) => {
+      return nodesData.map((n, idx) => {
         const existing = prevNodes.find((pn) => pn.id === n.id);
         return {
           id: n.id,
           type: n.type,
-          position: existing
-            ? existing.position
-            : INITIAL_NODE_POSITIONS[n.id] || {
-                x: 100 + (idx % 3) * 260,
-                y: 100 + Math.floor(idx / 3) * 160,
-              },
+          position: existing?.position || INITIAL_NODE_POSITIONS[n.id] || {
+            x: 100 + (idx % 3) * 280,
+            y: 100 + Math.floor(idx / 3) * 180,
+          },
           data: n,
           selected: selectedNodeId === n.id,
+          draggable: true,
         };
-      })
-    );
-  }, [nodesData, selectedNodeId]);
+      });
+    });
+  }, [nodesData, selectedNodeId, setNodes]);
 
+  useEffect(() => {
+    setEdges(
+      edgesData.map((e) => ({
+        id: e.id,
+        source: e.source,
+        target: e.target,
+        type: 'smoothstep',
+        animated: activePathEdgeIds.includes(e.id),
+        style: {
+          stroke: activePathEdgeIds.includes(e.id) ? '#38bdf8' : '#30363d',
+          strokeWidth: activePathEdgeIds.includes(e.id) ? 2.5 : 1.5,
+        },
+      }))
+    );
+  }, [edgesData, activePathEdgeIds, setEdges]);
+
+  // Allow connecting edges between nodes
   const onConnect = useCallback(
     (connection: Connection) => {
       setEdges((eds) => addEdge({ ...connection, type: 'smoothstep', animated: true }, eds));
     },
-    []
+    [setEdges]
   );
 
+  // Drag over handler for canvas
   const onDragOver = useCallback((event: React.DragEvent) => {
     event.preventDefault();
     event.dataTransfer.dropEffect = 'move';
   }, []);
 
+  // Drop handler to spawn a new node from palette
   const onDrop = useCallback(
     (event: React.DragEvent) => {
       event.preventDefault();
@@ -162,20 +191,23 @@ function GraphCanvasInner() {
         type: item.type,
         position,
         data: newNodeData,
+        draggable: true,
       };
 
       setNodes((nds) => [...nds, newFlowNode]);
       selectNode(newNodeId);
     },
-    [screenToFlowPosition, addNode, selectNode]
+    [screenToFlowPosition, addNode, selectNode, setNodes]
   );
 
+  // Auto Tidy Layout Algorithm
   const handleTidyLayout = useCallback(() => {
     const layouted = computeTidyLayout(nodes, edges);
     setNodes(layouted);
     setTimeout(() => fitView({ duration: 400, padding: 0.2 }), 50);
-  }, [nodes, edges, fitView]);
+  }, [nodes, edges, setNodes, fitView]);
 
+  // Context Menu handlers
   const onContextMenu = useCallback((event: React.MouseEvent) => {
     event.preventDefault();
     setContextMenu({ x: event.clientX, y: event.clientY });
@@ -234,8 +266,9 @@ function GraphCanvasInner() {
           <span className="text-zinc-700">|</span>
 
           <div className="flex items-center gap-1.5 text-xs font-mono text-zinc-300">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <Move className="w-3.5 h-3.5 text-emerald-400" />
             <span className="text-cyan-400 font-semibold">{nodes.length} Nodes</span>
+            <span className="text-[10px] text-zinc-500">(Draggable)</span>
           </div>
 
           <button
@@ -251,42 +284,49 @@ function GraphCanvasInner() {
       {/* Drag & Drop Node Drawer */}
       <NodePaletteDrawer isOpen={isPaletteOpen} onClose={() => setIsPaletteOpen(false)} />
 
-      {/* ReactFlow Canvas */}
+      {/* ReactFlow Interactive Canvas */}
       <div className="w-full h-full" onDragOver={onDragOver} onDrop={onDrop}>
         <ReactFlow
           nodes={nodes}
           edges={edges}
           nodeTypes={nodeTypes}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
           onConnect={onConnect}
           onPaneClick={() => selectNode(null)}
+          nodesDraggable={true}
+          elementsSelectable={true}
+          nodesConnectable={true}
+          snapToGrid={true}
+          snapGrid={[15, 15]}
           fitView
           fitViewOptions={{ padding: 0.2 }}
-          minZoom={0.3}
-          maxZoom={2.0}
+          minZoom={0.2}
+          maxZoom={2.4}
           proOptions={{ hideAttribution: true }}
         >
-          <Background variant={BackgroundVariant.Dots} gap={18} size={1} color="#1f2438" />
+          <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="#212638" />
 
-          {/* Floating Zoom & Control Panel (Inspired by fynt) */}
+          {/* Floating Zoom & Control Panel */}
           <Panel position="bottom-left" className="!m-4">
             <div className="flex flex-col gap-1.5 bg-[#0e1017]/95 backdrop-blur-md p-1.5 rounded-lg border border-[#30363d] shadow-xl">
               <button
                 onClick={() => zoomIn()}
-                className="p-1.5 bg-[#161b22] hover:bg-[#1c2128] border border-[#30363d] rounded text-zinc-400 hover:text-cyan-300 transition-all"
+                className="p-2 bg-[#161b22] hover:bg-[#1c2128] border border-[#30363d] rounded text-zinc-400 hover:text-cyan-300 transition-all"
                 title="Zoom In"
               >
                 <ZoomIn className="w-4 h-4" />
               </button>
               <button
                 onClick={() => zoomOut()}
-                className="p-1.5 bg-[#161b22] hover:bg-[#1c2128] border border-[#30363d] rounded text-zinc-400 hover:text-cyan-300 transition-all"
+                className="p-2 bg-[#161b22] hover:bg-[#1c2128] border border-[#30363d] rounded text-zinc-400 hover:text-cyan-300 transition-all"
                 title="Zoom Out"
               >
                 <ZoomOut className="w-4 h-4" />
               </button>
               <button
                 onClick={() => fitView({ duration: 300, padding: 0.2 })}
-                className="p-1.5 bg-[#161b22] hover:bg-[#1c2128] border border-[#30363d] rounded text-zinc-400 hover:text-cyan-300 transition-all"
+                className="p-2 bg-[#161b22] hover:bg-[#1c2128] border border-[#30363d] rounded text-zinc-400 hover:text-cyan-300 transition-all"
                 title="Fit View"
               >
                 <Maximize2 className="w-4 h-4" />
@@ -294,6 +334,7 @@ function GraphCanvasInner() {
             </div>
           </Panel>
 
+          {/* MiniMap */}
           <MiniMap
             nodeColor={(n) => {
               if (n.type === 'module') return '#38bdf8';
@@ -304,6 +345,8 @@ function GraphCanvasInner() {
             maskColor="rgba(8, 9, 13, 0.85)"
             className="!bg-[#0e1017] !border !border-[#222638] !rounded-lg"
             position="bottom-right"
+            zoomable
+            pannable
           />
         </ReactFlow>
       </div>
