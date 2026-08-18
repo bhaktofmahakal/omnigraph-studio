@@ -652,6 +652,7 @@ export const useOmniStore = create<OmniStoreState>((set, get) => ({
     set({
       files: updatedFiles,
       isApprovalModalOpen: false,
+      diffHunks: diffHunks.map(h => (h.status === 'accepted' ? { ...h, status: 'applied' } : h)),
       nodes: get().nodes.map(n => ({
         ...n,
         status: n.status === 'modified' ? 'verified' : n.status,

@@ -99,7 +99,7 @@ export interface DiffHunk {
   newLines: number;
   header: string;
   lines: HunkLine[];
-  status: 'pending' | 'accepted' | 'rejected';
+  status: 'pending' | 'accepted' | 'rejected' | 'applied';
   explanation: string;
   astNodeId?: string;
 }
