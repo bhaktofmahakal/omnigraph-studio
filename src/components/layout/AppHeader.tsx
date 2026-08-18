@@ -2,12 +2,14 @@
 
 import React from 'react';
 import { useOmniStore } from '@/lib/store/useOmniStore';
-import { Play, Pause, ShieldCheck, Zap, Layers, RotateCcw, Menu } from 'lucide-react';
+import { Play, Pause, ShieldCheck, Zap, Layers, RotateCcw, Menu, FolderGit2, Plus } from 'lucide-react';
+import { RepoIngestModal } from './RepoIngestModal';
 
 export const AppHeader: React.FC = () => {
   const scenarios = useOmniStore(state => state.scenarios);
   const activeScenarioId = useOmniStore(state => state.activeScenarioId);
   const setScenario = useOmniStore(state => state.setScenario);
+  const openIngestModal = useOmniStore(state => state.openIngestModal);
   const isAgentRunning = useOmniStore(state => state.isAgentRunning);
   const startPSMASSweep = useOmniStore(state => state.startPSMASSweep);
   const pausePSMASSweep = useOmniStore(state => state.pausePSMASSweep);
@@ -18,36 +20,49 @@ export const AppHeader: React.FC = () => {
   const collaborators = useOmniStore(state => state.collaborators);
 
   return (
-    <header className="h-12 sm:h-13 bg-[#161b22] border-b border-[#30363d] px-2.5 sm:px-4 flex items-center justify-between shrink-0 select-none z-20 gap-2 min-w-0">
-      {/* Left: Mobile Hamburger & Scenario Switcher */}
-      <div className="flex items-center gap-1.5 sm:gap-3 min-w-0">
-        {/* Hamburger Trigger for Mobile Drawer */}
-        <button
-          onClick={toggleMobileSidebar}
-          className="p-1.5 rounded-lg bg-[#0d1117] hover:bg-[#21262d] text-[#8b949e] hover:text-[#e6edf3] border border-[#30363d] md:hidden shrink-0 transition-colors"
-          aria-label="Open navigation menu"
-        >
-          <Menu className="w-4 h-4" />
-        </button>
-
-        {/* Scenario Switcher Dropdown */}
-        <div className="flex items-center gap-1 sm:gap-2 bg-[#0d1117] px-2 sm:px-2.5 py-1 rounded-lg border border-[#30363d] font-mono text-xs max-w-[140px] xs:max-w-[200px] sm:max-w-[260px] md:max-w-none truncate">
-          <Layers className="w-3.5 h-3.5 text-[#58a6ff] shrink-0" />
-          <span className="text-[#8b949e] font-medium hidden md:inline shrink-0">Scenario:</span>
-          <select
-            value={activeScenarioId}
-            onChange={(e) => setScenario(e.target.value)}
-            className="bg-transparent text-[#e6edf3] font-semibold focus:outline-none cursor-pointer text-xs truncate max-w-full"
-            aria-label="Select active scenario"
+    <>
+      <RepoIngestModal />
+      <header className="h-12 sm:h-13 bg-[#161b22] border-b border-[#30363d] px-2.5 sm:px-4 flex items-center justify-between shrink-0 select-none z-20 gap-2 min-w-0">
+        {/* Left: Mobile Hamburger, Scenario Switcher & Import Repo */}
+        <div className="flex items-center gap-1.5 sm:gap-2.5 min-w-0">
+          {/* Hamburger Trigger for Mobile Drawer */}
+          <button
+            onClick={toggleMobileSidebar}
+            className="p-1.5 rounded-lg bg-[#0d1117] hover:bg-[#21262d] text-[#8b949e] hover:text-[#e6edf3] border border-[#30363d] md:hidden shrink-0 transition-colors"
+            aria-label="Open navigation menu"
           >
-            {scenarios.map((s) => (
-              <option key={s.id} value={s.id} className="bg-[#161b22] text-[#e6edf3]">
-                {s.title} ({s.category})
-              </option>
-            ))}
-          </select>
+            <Menu className="w-4 h-4" />
+          </button>
+
+          {/* Scenario Switcher Dropdown */}
+          <div className="flex items-center gap-1 sm:gap-2 bg-[#0d1117] px-2 sm:px-2.5 py-1 rounded-lg border border-[#30363d] font-mono text-xs max-w-[130px] xs:max-w-[180px] sm:max-w-[240px] md:max-w-none truncate">
+            <Layers className="w-3.5 h-3.5 text-[#58a6ff] shrink-0" />
+            <span className="text-[#8b949e] font-medium hidden md:inline shrink-0">Codebase:</span>
+            <select
+              value={activeScenarioId}
+              onChange={(e) => setScenario(e.target.value)}
+              className="bg-transparent text-[#e6edf3] font-semibold focus:outline-none cursor-pointer text-xs truncate max-w-full"
+              aria-label="Select active scenario"
+            >
+              {scenarios.map((s) => (
+                <option key={s.id} value={s.id} className="bg-[#161b22] text-[#e6edf3]">
+                  {s.title} ({s.category})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Ingest Any Codebase Button */}
+          <button
+            onClick={openIngestModal}
+            className="flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg bg-[#1f242c] hover:bg-[#282e38] text-[#58a6ff] hover:text-[#79c0ff] border border-[#388bfd]/30 font-mono text-xs font-semibold transition-colors shrink-0"
+            title="Ingest any custom codebase or GitHub repo"
+          >
+            <Plus className="w-3 h-3" />
+            <span className="hidden sm:inline">Import Repo</span>
+            <span className="sm:hidden">Import</span>
+          </button>
         </div>
-      </div>
 
       {/* Center: Global RUN PSMAS SWEEP Action Button */}
       <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
@@ -118,5 +133,6 @@ export const AppHeader: React.FC = () => {
         </button>
       </div>
     </header>
-  );
+  </>
+);
 };

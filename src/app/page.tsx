@@ -182,6 +182,14 @@ export default function WorkspaceHome() {
         </button>
 
         <button
+          onClick={useOmniStore.getState().openIngestModal}
+          className="flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-xl bg-[#1f242c] hover:bg-[#282e38] text-[#58a6ff] hover:text-[#79c0ff] font-bold text-xs font-mono border border-[#388bfd]/40 transition-all min-h-[38px] shadow-sm"
+        >
+          <Sparkles className="w-3.5 h-3.5 text-[#58a6ff] shrink-0" />
+          <span>+ Ingest Any Codebase</span>
+        </button>
+
+        <button
           onClick={() => router.push('/ide')}
           className="flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-xl bg-[#21262d] hover:bg-[#30363d] text-[#e6edf3] font-medium text-xs font-mono border border-[#30363d] transition-all min-h-[38px]"
         >

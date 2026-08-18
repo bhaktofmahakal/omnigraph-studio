@@ -17,11 +17,15 @@ import { calculateGraphTokenMetrics, expandNodeProgressive } from '../graph/ogPa
 import { parseCodeToHunks } from '../diff/patchEngine';
 
 interface OmniStoreState {
-  // Scenarios
+  // Scenarios & Custom Ingestion
   scenarios: Scenario[];
   activeScenarioId: string;
   activeScenario: Scenario;
+  isIngestModalOpen: boolean;
   setScenario: (id: string) => void;
+  addScenario: (newScenario: Scenario) => void;
+  openIngestModal: () => void;
+  closeIngestModal: () => void;
 
   // ObjectGraph Canvas
   nodes: OGNodeData[];
@@ -153,12 +157,20 @@ const INITIAL_COLLABORATORS: Collaborator[] = [
 ];
 
 export const useOmniStore = create<OmniStoreState>((set, get) => ({
-  // Scenarios
+  // Scenarios & Custom Ingestion
   scenarios: SCENARIOS,
   activeScenarioId: initialScenario.id,
   activeScenario: initialScenario,
+  isIngestModalOpen: false,
+  openIngestModal: () => set({ isIngestModalOpen: true }),
+  closeIngestModal: () => set({ isIngestModalOpen: false }),
+  addScenario: (newScenario: Scenario) => {
+    const updatedScenarios = [newScenario, ...get().scenarios];
+    set({ scenarios: updatedScenarios });
+    get().setScenario(newScenario.id);
+  },
   setScenario: (id: string) => {
-    const scenario = SCENARIOS.find(s => s.id === id) || SCENARIOS[0];
+    const scenario = get().scenarios.find(s => s.id === id) || SCENARIOS[0];
     const hunks = scenario.files.flatMap(f =>
       parseCodeToHunks(f.name, f.initialCode, f.modifiedCode)
     );
@@ -179,7 +191,7 @@ export const useOmniStore = create<OmniStoreState>((set, get) => ({
       edges: scenario.initialEdges,
       files,
       diffHunks: hunks,
-      activeFileTab: scenario.files[0]?.name || 'auth.ts',
+      activeFileTab: scenario.files[0]?.name || 'core.ts',
       logs: [],
       currentPhaseAngle: 0,
       currentPhaseAngleDeg: 0,
