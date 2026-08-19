@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import {
   AgentRoleId,
+  BeadStatus,
+  BeadTask,
   Collaborator,
   DiffHunk,
   OGEdgeData,
@@ -13,10 +15,18 @@ import {
 } from '../types';
 import { SCENARIOS } from '../graph/sampleCodebases';
 import { DJANGO_SCENARIO_STEPS, INITIAL_AGENTS } from '../agents/psmasEngine';
+import { createDynamicBeadsForRepo, INITIAL_BEAD_TASKS } from '../agents/beadsEngine';
 import { calculateGraphTokenMetrics, expandNodeProgressive } from '../graph/ogParser';
 import { parseCodeToHunks, reconcileApprovedHunks } from '../diff/patchEngine';
 
 interface OmniStoreState {
+  // Beads Task Graph (2026 Operational Architecture)
+  beads: BeadTask[];
+  selectedBeadId: string | null;
+  addBead: (bead: BeadTask) => void;
+  updateBeadStatus: (id: string, status: BeadStatus) => void;
+  selectBead: (id: string | null) => void;
+
   // Scenarios & Custom Ingestion
   scenarios: Scenario[];
   activeScenarioId: string;
@@ -161,6 +171,24 @@ const INITIAL_COLLABORATORS: Collaborator[] = [
 ];
 
 export const useOmniStore = create<OmniStoreState>((set, get) => ({
+  // Beads Task Graph (2026 Operational Architecture)
+  beads: INITIAL_BEAD_TASKS,
+  selectedBeadId: null,
+  addBead: (bead: BeadTask) => set({ beads: [bead, ...get().beads] }),
+  updateBeadStatus: (id: string, status: BeadStatus) =>
+    set({
+      beads: get().beads.map((b) =>
+        b.id === id
+          ? {
+              ...b,
+              status,
+              completedAt: status === 'completed' ? new Date().toISOString() : b.completedAt,
+            }
+          : b
+      ),
+    }),
+  selectBead: (id: string | null) => set({ selectedBeadId: id }),
+
   // Scenarios & Custom Ingestion
   scenarios: SCENARIOS,
   activeScenarioId: initialScenario.id,
@@ -188,6 +216,12 @@ export const useOmniStore = create<OmniStoreState>((set, get) => ({
       isDirty: false,
     }));
 
+    const dynamicBeads = createDynamicBeadsForRepo(
+      scenario.title,
+      scenario.files,
+      scenario.taskDirective || scenario.description || 'Perform AST audit and optimization'
+    );
+
     set({
       activeScenarioId: id,
       activeScenario: scenario,
@@ -195,6 +229,7 @@ export const useOmniStore = create<OmniStoreState>((set, get) => ({
       edges: scenario.initialEdges,
       files,
       diffHunks: hunks,
+      beads: dynamicBeads,
       activeFileTab: scenario.files[0]?.name || 'core.ts',
       logs: [],
       currentPhaseAngle: 0,
@@ -310,6 +345,24 @@ export const useOmniStore = create<OmniStoreState>((set, get) => ({
 
       const phase = agentPhases[i];
       const agent = get().agents.find(a => a.id === phase.id)!;
+
+      // Role to Operational Bead Role mapping
+      const roleToBeadRole: Record<string, 'mayor' | 'polecat' | 'witness' | 'refinery'> = {
+        architect: 'mayor',
+        codewriter: 'polecat',
+        testrunner: 'witness',
+        security: 'refinery',
+      };
+      const opRole = roleToBeadRole[phase.id] || 'mayor';
+
+      // Update matching Bead task to in_progress
+      set({
+        beads: get().beads.map((b) =>
+          b.assignedRole === opRole && b.status === 'pending'
+            ? { ...b, status: 'in_progress' }
+            : b
+        ),
+      });
 
       // Update phase angle and activate agent
       set({
@@ -550,8 +603,13 @@ export const useOmniStore = create<OmniStoreState>((set, get) => ({
         },
       });
 
-      // Mark agent completed
+      // Mark agent and matching Bead completed
       set({
+        beads: get().beads.map((b) =>
+          b.assignedRole === opRole
+            ? { ...b, status: 'completed', completedAt: new Date().toISOString() }
+            : b
+        ),
         agents: get().agents.map(a => ({
           ...a,
           status: a.id === phase.id ? 'completed' : a.status,
