@@ -29,17 +29,22 @@ export async function POST(req: Request) {
 
     if (hunks.length > 0) {
       hunks.forEach((hunk: any) => {
-        patchBundle += `--- a/${hunk.file}\n+++ b/${hunk.file}\n${hunk.header || '@@ -1,1 +1,1 @@'}\n`;
+        patchBundle += `diff --git a/${hunk.file} b/${hunk.file}\n--- a/${hunk.file}\n+++ b/${hunk.file}\n${hunk.header || '@@ -1,1 +1,1 @@'}\n`;
         hunk.lines?.forEach((line: any) => {
           const prefix = line.type === 'addition' ? '+' : line.type === 'deletion' ? '-' : ' ';
           patchBundle += `${prefix}${line.content}\n`;
         });
         patchBundle += '\n';
       });
-    } else {
-      // Generate diff from modified files vs current
+    } else if (files.length > 0) {
+      // Generate diff from modified files vs original
       files.forEach((f: any) => {
-        patchBundle += `--- a/${f.path}\n+++ b/${f.path}\n@@ -1,1 +1,1 @@\n# Modified by OmniGraph Studio\n`;
+        const oldLines = (f.oldCode || f.originalCode || '').split('\n');
+        const newLines = (f.newCode || f.currentCode || '').split('\n');
+        patchBundle += `diff --git a/${f.path} b/${f.path}\n--- a/${f.path}\n+++ b/${f.path}\n@@ -1,${oldLines.length} +1,${newLines.length} @@\n`;
+        oldLines.forEach((l: string) => { if (l) patchBundle += `-${l}\n`; });
+        newLines.forEach((l: string) => { if (l) patchBundle += `+${l}\n`; });
+        patchBundle += '\n';
       });
     }
 
