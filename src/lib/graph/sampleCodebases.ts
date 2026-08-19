@@ -3,10 +3,10 @@ import { Scenario } from '../types';
 export const SCENARIOS: Scenario[] = [
   {
     id: 'django-auth-refactor',
-    title: 'Django 11099: Auth Middleware & Session Cache Refactor',
-    category: 'SWE-bench Lite (django/django)',
+    title: 'django/django: Auth Middleware & Context Refactor',
+    category: 'Production Core (django/django)',
     description: 'Refactor session authentication pipeline to use stateless JWT with RBAC validation and auto-refreshing cache invalidation.',
-    benchmarkTarget: 'Issue django-11099 (Resolving SessionStore context bleed)',
+    benchmarkTarget: 'Resolving SessionStore context bleed across distributed worker threads',
     sweBenchMetadata: {
       id: 'django-11099',
       taskName: 'SessionStore Concurrent Context Isolation',

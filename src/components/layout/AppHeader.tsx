@@ -45,18 +45,18 @@ export const AppHeader: React.FC = () => {
               aria-label="Select active codebase"
             >
               {scenarios.some(s => s.id.startsWith('custom-')) && (
-                <optgroup label="📁 Your Imported Repositories" className="bg-[#161b22] text-[#58a6ff] font-bold">
+                <optgroup label="Imported Repositories" className="bg-[#161b22] text-[#58a6ff] font-bold">
                   {scenarios.filter(s => s.id.startsWith('custom-')).map((s) => (
                     <option key={s.id} value={s.id} className="bg-[#161b22] text-[#e6edf3]">
-                      📁 {s.title} ({s.category})
+                      {s.title}
                     </option>
                   ))}
                 </optgroup>
               )}
-              <optgroup label="🧪 Sample Benchmarks" className="bg-[#161b22] text-[#8b949e] font-bold">
+              <optgroup label="Active Codebases" className="bg-[#161b22] text-[#8b949e] font-bold">
                 {scenarios.filter(s => !s.id.startsWith('custom-')).map((s) => (
                   <option key={s.id} value={s.id} className="bg-[#161b22] text-[#e6edf3]">
-                    {s.id === 'django-auth-refactor' ? '🧪 django/django (SWE-bench Lite)' : s.id === 'express-guard-audit' ? '🧪 express-guard (TypeScript Monorepo)' : s.title}
+                    {s.id === 'django-auth-refactor' ? 'django/django (Python Core)' : s.id === 'express-guard-audit' ? 'express-guard (TypeScript Monorepo)' : s.title}
                   </option>
                 ))}
               </optgroup>
