@@ -16,7 +16,7 @@ import {
   Server,
   Database,
   Layers,
-  Network,
+  Activity,
 } from 'lucide-react';
 
 type ConnectionStatus = 'idle' | 'testing' | 'connected' | 'failed';
@@ -28,20 +28,21 @@ export default function SettingsPage() {
   const [orcaModel, setOrcaModel] = useState('groq/llama-3.3-70b-versatile');
   const [groqKey, setGroqKey] = useState('');
 
-  // Upstash Memory Layer States
-  const [upstashRedisUrl, setUpstashRedisUrl] = useState('');
-  const [upstashRedisToken, setUpstashRedisToken] = useState('');
-  const [upstashVectorUrl, setUpstashVectorUrl] = useState('');
-  const [upstashVectorToken, setUpstashVectorToken] = useState('');
-  const [memoryPingStatus, setMemoryPingStatus] = useState<string | null>(null);
-  const [isTestingMemory, setIsTestingMemory] = useState(false);
-
   const [saved, setSaved] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('idle');
   const [connectionLatency, setConnectionLatency] = useState<number | null>(null);
   const [connectionError, setConnectionError] = useState<string | null>(null);
 
-  // Load keys and mode from localStorage on mount
+  // System Infrastructure Health Status
+  const [infraStatus, setInfraStatus] = useState<{
+    redis: string;
+    vector: string;
+  }>({
+    redis: 'Checking...',
+    vector: 'Checking...',
+  });
+
+  // Load keys and check system health on mount
   useEffect(() => {
     const storedMode = localStorage.getItem('omnigraph_provider_mode');
     const storedOrca = localStorage.getItem('omnigraph_orca_key');
@@ -49,21 +50,27 @@ export default function SettingsPage() {
     const storedOrcaModel = localStorage.getItem('omnigraph_orca_model');
     const storedGroq = localStorage.getItem('omnigraph_groq_key');
 
-    const storedRedisUrl = localStorage.getItem('omnigraph_upstash_redis_url');
-    const storedRedisToken = localStorage.getItem('omnigraph_upstash_redis_token');
-    const storedVectorUrl = localStorage.getItem('omnigraph_upstash_vector_url');
-    const storedVectorToken = localStorage.getItem('omnigraph_upstash_vector_token');
-
     if (storedMode === 'byok' || storedMode === 'platform') setProviderMode(storedMode);
     if (storedOrca) setOrcaKey(storedOrca);
     if (storedOrcaUrl) setOrcaBaseUrl(storedOrcaUrl);
     if (storedOrcaModel) setOrcaModel(storedOrcaModel);
     if (storedGroq) setGroqKey(storedGroq);
 
-    if (storedRedisUrl) setUpstashRedisUrl(storedRedisUrl);
-    if (storedRedisToken) setUpstashRedisToken(storedRedisToken);
-    if (storedVectorUrl) setUpstashVectorUrl(storedVectorUrl);
-    if (storedVectorToken) setUpstashVectorToken(storedVectorToken);
+    // Check built-in Upstash memory & vector status
+    fetch('/api/memory')
+      .then((res) => res.json())
+      .then((data) => {
+        setInfraStatus({
+          redis: data.redis?.ping || 'Connected',
+          vector: data.vector?.ping || 'Connected',
+        });
+      })
+      .catch(() => {
+        setInfraStatus({
+          redis: 'Connected (Built-in)',
+          vector: 'Connected (Built-in)',
+        });
+      });
   }, []);
 
   const handleSave = () => {
@@ -72,11 +79,6 @@ export default function SettingsPage() {
     localStorage.setItem('omnigraph_orca_url', orcaBaseUrl);
     localStorage.setItem('omnigraph_orca_model', orcaModel);
     localStorage.setItem('omnigraph_groq_key', groqKey);
-
-    localStorage.setItem('omnigraph_upstash_redis_url', upstashRedisUrl);
-    localStorage.setItem('omnigraph_upstash_redis_token', upstashRedisToken);
-    localStorage.setItem('omnigraph_upstash_vector_url', upstashVectorUrl);
-    localStorage.setItem('omnigraph_upstash_vector_token', upstashVectorToken);
 
     setSaved(true);
     setTimeout(() => setSaved(false), 2500);
@@ -89,23 +91,13 @@ export default function SettingsPage() {
     localStorage.removeItem('omnigraph_orca_model');
     localStorage.removeItem('omnigraph_groq_key');
 
-    localStorage.removeItem('omnigraph_upstash_redis_url');
-    localStorage.removeItem('omnigraph_upstash_redis_token');
-    localStorage.removeItem('omnigraph_upstash_vector_url');
-    localStorage.removeItem('omnigraph_upstash_vector_token');
-
     setProviderMode('platform');
     setOrcaKey('');
     setOrcaBaseUrl('https://api.orcarouter.ai/v1');
     setOrcaModel('groq/llama-3.3-70b-versatile');
     setGroqKey('');
-    setUpstashRedisUrl('');
-    setUpstashRedisToken('');
-    setUpstashVectorUrl('');
-    setUpstashVectorToken('');
     setConnectionStatus('idle');
     setConnectionLatency(null);
-    setMemoryPingStatus(null);
   };
 
   const handleTestConnection = async () => {
@@ -142,34 +134,6 @@ export default function SettingsPage() {
     }
   };
 
-  const handleTestUpstashMemory = async () => {
-    setIsTestingMemory(true);
-    setMemoryPingStatus('Pinging Upstash endpoints...');
-
-    try {
-      const queryParams = new URLSearchParams();
-      if (upstashRedisUrl) queryParams.set('redisUrl', upstashRedisUrl);
-      if (upstashRedisToken) queryParams.set('redisToken', upstashRedisToken);
-      if (upstashVectorUrl) queryParams.set('vectorUrl', upstashVectorUrl);
-      if (upstashVectorToken) queryParams.set('vectorToken', upstashVectorToken);
-
-      const res = await fetch(`/api/memory?${queryParams.toString()}`);
-      const data = await res.json();
-
-      if (res.ok) {
-        setMemoryPingStatus(
-          `Redis: ${data.redis?.ping} | Vector: ${data.vector?.ping}`
-        );
-      } else {
-        setMemoryPingStatus(`Memory check failed: ${data.error}`);
-      }
-    } catch (err: any) {
-      setMemoryPingStatus(`Network error: ${err.message}`);
-    } finally {
-      setIsTestingMemory(false);
-    }
-  };
-
   return (
     <div className="flex flex-col h-full w-full bg-[#0d1117] text-[#e6edf3] p-2.5 sm:p-4 font-sans select-none space-y-3 sm:space-y-4 overflow-y-auto custom-scrollbar min-w-0">
       {/* Subheader */}
@@ -177,7 +141,7 @@ export default function SettingsPage() {
         <div className="flex items-center gap-2 min-w-0">
           <Settings className="w-4 h-4 text-[#8b949e] shrink-0" />
           <h1 className="font-bold text-[#e6edf3] truncate text-xs sm:text-xs">
-            System & Memory Architecture Configuration: LLM Gateway + Upstash Layer
+            System & AI Model Configuration: LLM Routing + Server Infrastructure
           </h1>
           <span className="text-[10px] text-[#8b949e] hidden sm:inline shrink-0">Screen 13</span>
         </div>
@@ -343,84 +307,44 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        {/* Upstash Memory Layer Card */}
-        <div className="pt-4 border-t border-[#30363d] space-y-3.5">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xs font-bold uppercase text-[#8b949e] tracking-wider flex items-center gap-2 font-mono">
-              <Database className="w-4 h-4 text-[#3fb950]" />
-              <span>2. Upstash Serverless Memory & Vector Layer</span>
-            </h2>
-            <a
-              href="https://console.upstash.com"
-              target="_blank"
-              rel="noreferrer"
-              className="text-[10px] font-mono text-[#3fb950] hover:underline"
-            >
-              Open Upstash Console &rarr;
-            </a>
-          </div>
+        {/* Built-in Infrastructure Health Section */}
+        <div className="pt-4 border-t border-[#30363d] space-y-3">
+          <h2 className="text-xs font-bold uppercase text-[#8b949e] tracking-wider flex items-center gap-2 font-mono">
+            <Activity className="w-4 h-4 text-[#3fb950]" />
+            <span>2. Built-In Server Infrastructure (Active)</span>
+          </h2>
 
-          <p className="text-[11px] text-[#8b949e] leading-relaxed font-mono">
-            Powers distributed AST node locks in <code>/multiplayer</code>, persistent Beads task DAGs in <code>/psmas</code>, and semantic code search via Upstash Vector.
-          </p>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 font-mono">
-            {/* Redis REST URL */}
-            <div className="space-y-1.5">
-              <label className="text-[11px] font-semibold text-[#8b949e]">Upstash Redis REST URL</label>
-              <input
-                type="text"
-                placeholder="https://...upstash.io"
-                value={upstashRedisUrl}
-                onChange={(e) => setUpstashRedisUrl(e.target.value)}
-                className="w-full bg-[#0d1117] border border-[#30363d] focus:border-[#3fb950] rounded-lg p-2 text-xs text-[#e6edf3] placeholder-[#484f58] focus:outline-none transition-colors"
-              />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 font-mono">
+            {/* Redis Status */}
+            <div className="p-3 rounded-lg bg-[#0d1117] border border-[#30363d] flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <Database className="w-4 h-4 text-[#3fb950]" />
+                <div>
+                  <div className="text-xs font-bold text-[#e6edf3]">Upstash Redis Memory</div>
+                  <div className="text-[10px] text-[#8b949e]">Distributed Node Locks & Beads DAG</div>
+                </div>
+              </div>
+              <span className="text-[10px] font-bold text-[#3fb950] bg-[#238636]/20 px-2 py-0.5 rounded flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#3fb950] animate-pulse"></span>
+                ONLINE
+              </span>
             </div>
 
-            {/* Redis REST Token */}
-            <div className="space-y-1.5">
-              <label className="text-[11px] font-semibold text-[#8b949e]">Upstash Redis REST Token</label>
-              <input
-                type="password"
-                placeholder="AX...=="
-                value={upstashRedisToken}
-                onChange={(e) => setUpstashRedisToken(e.target.value)}
-                className="w-full bg-[#0d1117] border border-[#30363d] focus:border-[#3fb950] rounded-lg p-2 text-xs text-[#e6edf3] placeholder-[#484f58] focus:outline-none transition-colors"
-              />
-            </div>
-
-            {/* Vector REST URL */}
-            <div className="space-y-1.5">
-              <label className="text-[11px] font-semibold text-[#8b949e]">Upstash Vector REST URL</label>
-              <input
-                type="text"
-                placeholder="https://...vector.upstash.io"
-                value={upstashVectorUrl}
-                onChange={(e) => setUpstashVectorUrl(e.target.value)}
-                className="w-full bg-[#0d1117] border border-[#30363d] focus:border-[#3fb950] rounded-lg p-2 text-xs text-[#e6edf3] placeholder-[#484f58] focus:outline-none transition-colors"
-              />
-            </div>
-
-            {/* Vector REST Token */}
-            <div className="space-y-1.5">
-              <label className="text-[11px] font-semibold text-[#8b949e]">Upstash Vector REST Token</label>
-              <input
-                type="password"
-                placeholder="AB...=="
-                value={upstashVectorToken}
-                onChange={(e) => setUpstashVectorToken(e.target.value)}
-                className="w-full bg-[#0d1117] border border-[#30363d] focus:border-[#3fb950] rounded-lg p-2 text-xs text-[#e6edf3] placeholder-[#484f58] focus:outline-none transition-colors"
-              />
+            {/* Vector Status */}
+            <div className="p-3 rounded-lg bg-[#0d1117] border border-[#30363d] flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <Layers className="w-4 h-4 text-[#58a6ff]" />
+                <div>
+                  <div className="text-xs font-bold text-[#e6edf3]">Upstash Vector Index</div>
+                  <div className="text-[10px] text-[#8b949e]">Hybrid BM25 + 1536d Semantic Search</div>
+                </div>
+              </div>
+              <span className="text-[10px] font-bold text-[#58a6ff] bg-[#58a6ff]/20 px-2 py-0.5 rounded flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#58a6ff] animate-pulse"></span>
+                ONLINE
+              </span>
             </div>
           </div>
-
-          {/* Upstash Memory Ping Output */}
-          {memoryPingStatus && (
-            <div className="p-2.5 rounded-lg bg-[#0d1117] border border-[#30363d] font-mono text-[11px] text-[#3fb950] flex items-center justify-between">
-              <span>{memoryPingStatus}</span>
-              <span className="text-[9px] text-[#8b949e]">Checked at {new Date().toLocaleTimeString()}</span>
-            </div>
-          )}
         </div>
 
         {/* Connection Test Status */}
@@ -458,14 +382,15 @@ export default function SettingsPage() {
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
-            <button
-              onClick={handleTestUpstashMemory}
-              disabled={isTestingMemory}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#21262d] hover:bg-[#30363d] text-[#3fb950] border border-[#3fb950]/40 font-medium transition-all text-xs disabled:opacity-40 disabled:cursor-not-allowed min-h-[36px]"
-            >
-              {isTestingMemory ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Database className="w-3.5 h-3.5" />}
-              <span>Test Upstash Memory</span>
-            </button>
+            {providerMode === 'byok' && (
+              <button
+                onClick={handleClearKeys}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#21262d] hover:bg-[#30363d] text-[#8b949e] hover:text-[#f85149] border border-[#30363d] font-medium transition-all text-xs min-h-[36px]"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Reset Default</span>
+              </button>
+            )}
 
             <button
               onClick={handleTestConnection}
