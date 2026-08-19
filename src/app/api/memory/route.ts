@@ -2,10 +2,12 @@ import { NextResponse } from 'next/server';
 import {
   acquireNodeLock,
   releaseNodeLock,
-  getAllNodeLocks,
+  getAllNodeLocksWithTTL,
   persistBeadsTaskGraph,
   fetchBeadsTaskGraph,
   searchSemanticAstNodes,
+  pushTeamBroadcastEvent,
+  fetchTeamBroadcastEvents,
   getUpstashRedis,
   getUpstashVector,
 } from '@/lib/memory/upstashMemory';
@@ -62,7 +64,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { action, nodeId, holderId, sessionId, beads, query, nodes, ttlSec = 30, credentials } = body;
+    const { action, nodeId, holderId, sessionId, beads, query, nodes, ttlSec = 30, event, credentials } = body;
 
     switch (action) {
       case 'acquire_lock': {
@@ -73,8 +75,9 @@ export async function POST(req: Request) {
         const res = await releaseNodeLock(nodeId, holderId, credentials);
         return NextResponse.json({ status: 'success', ...res });
       }
-      case 'get_locks': {
-        const res = await getAllNodeLocks(credentials);
+      case 'get_locks':
+      case 'get_locks_with_ttl': {
+        const res = await getAllNodeLocksWithTTL(credentials);
         return NextResponse.json({ status: 'success', ...res });
       }
       case 'persist_beads': {
@@ -87,6 +90,14 @@ export async function POST(req: Request) {
       }
       case 'vector_search': {
         const res = await searchSemanticAstNodes(query || '', nodes || [], 3, credentials);
+        return NextResponse.json({ status: 'success', ...res });
+      }
+      case 'post_team_event': {
+        const res = await pushTeamBroadcastEvent(event, credentials);
+        return NextResponse.json({ status: 'success', ...res });
+      }
+      case 'get_team_events': {
+        const res = await fetchTeamBroadcastEvents(credentials);
         return NextResponse.json({ status: 'success', ...res });
       }
       default:

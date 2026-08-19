@@ -73,16 +73,29 @@ function generateDeterministicAgentResponse(
         `TokenFold compression ratio: 72.4% reduction achieved via progressive signature disclosure.`,
         `[Handoff] Dispatched sub-task to Polecat worker along S^1 manifold (θ = π/2).`,
       ];
-    case 'codewriter':
+    case 'codewriter': {
+      const promptLower = (prompt || '').toLowerCase();
+      let diffSnippet = '';
+      if (promptLower.includes('jwt') || promptLower.includes('token') || promptLower.includes('auth')) {
+        diffSnippet = `\`\`\`diff\n--- a/${filePath}\n+++ b/${filePath}\n@@ -14,5 +14,9 @@\n-  // Insecure plain bearer verification\n-  return jwt.decode(rawHeader);\n+  // Hardened JWT verification with audience & expiry checks\n+  const decoded = await verifyToken(rawHeader, {\n+    issuer: 'https://auth.enterprise.internal',\n+    algorithms: ['RS256']\n+  });\n+  return decoded.payload;\n\`\`\``;
+      } else if (promptLower.includes('sql') || promptLower.includes('db') || promptLower.includes('query')) {
+        diffSnippet = `\`\`\`diff\n--- a/${filePath}\n+++ b/${filePath}\n@@ -28,4 +28,8 @@\n-  const query = \`SELECT * FROM users WHERE id = \${userId}\`;\n+  const query = 'SELECT * FROM users WHERE id = $1';\n+  const result = await db.query(query, [userId]);\n+  return result.rows[0];\n\`\`\``;
+      } else if (promptLower.includes('perf') || promptLower.includes('cache') || promptLower.includes('optimiz')) {
+        diffSnippet = `\`\`\`diff\n--- a/${filePath}\n+++ b/${filePath}\n@@ -8,4 +8,7 @@\n+  // Upstash Redis memory cache lookup\n+  const cached = await redis.get(\`cache:\${key}\`);\n+  if (cached) return JSON.parse(cached);\n\`\`\``;
+      } else {
+        diffSnippet = `\`\`\`diff\n--- a/${filePath}\n+++ b/${filePath}\n@@ -12,4 +12,8 @@\n-  // Legacy implementation\n-  processData(input);\n+  // Autonomous patch for ${nodeLabel}\n+  const validated = await sanitizeContext(input);\n+  return executeGuarded(validated);\n\`\`\``;
+      }
+
       return [
         `[ToolCall: fetch_node_source({ file: "${filePath}", target: "${nodeLabel}" })]`,
         `[ToolResult: Loaded AST source buffer (${nodeContext?.tokenCount || 180} tokens)]`,
-        `[ToolCall: synthesize_surgical_diff({ file: "${filePath}" })]`,
-        `Synthesizing surgical unified git diff hunk with zero-drift AST preservation:`,
-        `\`\`\`diff\n--- a/${filePath}\n+++ b/${filePath}\n@@ -12,4 +12,7 @@\n-  // unvalidated session store\n+  const session = await validateClaims(req.headers.authorization);\n+  if (!session.isValid) throw new UnauthorizedError('Token expired');\n\`\`\``,
-        `[ToolResult: Emitted 1 verified hunk. Syntax integrity check: PASSED]`,
+        `[ToolCall: synthesize_surgical_diff({ file: "${filePath}", directive: "${prompt || 'AST Refactoring'}" })]`,
+        `Synthesizing surgical unified git diff hunk for objective "${prompt || 'AST Refactor'}":`,
+        diffSnippet,
+        `[ToolResult: Emitted verified hunk with 0 offset drift. Syntax check: PASSED]`,
         `[Handoff] Queued hunk for Witness regression assertion verification (θ = π).`,
       ];
+    }
     case 'testrunner':
       return [
         `[ToolCall: generate_unit_assertions({ target: "${filePath}" })]`,

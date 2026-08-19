@@ -271,6 +271,10 @@ export const RepoIngestModal: React.FC = () => {
         files,
       });
 
+      if (typeof window !== 'undefined' && repoUrl) {
+        localStorage.setItem('omnigraph_active_repo_url', repoUrl);
+      }
+
       addScenario(newScenario);
       closeIngestModal();
       router.push('/graph');

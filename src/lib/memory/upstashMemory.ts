@@ -6,17 +6,29 @@ import { BeadTask, OGNodeData } from '@/lib/types';
  * Upstash Serverless Memory & Coordination Layer (2026 Multi-Agent Architecture)
  * 
  * Provides:
- * 1. Distributed AST Node Locking (Atomic Redis Locks) for Multiplayer Collaboration
+ * 1. Distributed AST Node Locking (Atomic Redis Locks with TTL) for Multiplayer Collaboration
  * 2. External Beads Task DAG State Persistence
  * 3. TokenFold Compressed Symbol Cache
  * 4. Semantic AST Vector Search & Retrieval
+ * 5. Real-Time Shared Multiplayer Feed
  */
+
+export interface TeamBroadcastEvent {
+  id: string;
+  timestamp: string;
+  user: string;
+  role: string;
+  action: 'lock_acquired' | 'lock_released' | 'ping_sent' | 'swarm_dispatched' | 'hunk_accepted';
+  nodeId?: string;
+  message: string;
+}
 
 // In-Memory Fallback Store (when Upstash env keys are not provided)
 class InMemoryMemoryStore {
   private locks: Map<string, { holderId: string; expiresAt: number }> = new Map();
   private beadsStore: Map<string, BeadTask[]> = new Map();
   private astCache: Map<string, any> = new Map();
+  private events: TeamBroadcastEvent[] = [];
 
   async acquireLock(nodeId: string, holderId: string, ttlSec: number = 30): Promise<boolean> {
     const existing = this.locks.get(nodeId);
@@ -37,12 +49,16 @@ class InMemoryMemoryStore {
     return false;
   }
 
-  async getAllLocks(): Promise<Record<string, string>> {
+  async getAllLocksWithTTL(): Promise<Array<{ nodeId: string; holderId: string; ttlSec: number }>> {
     const now = Date.now();
-    const result: Record<string, string> = {};
+    const result: Array<{ nodeId: string; holderId: string; ttlSec: number }> = [];
     for (const [nodeId, data] of this.locks.entries()) {
       if (data.expiresAt > now) {
-        result[nodeId] = data.holderId;
+        result.push({
+          nodeId,
+          holderId: data.holderId,
+          ttlSec: Math.max(1, Math.round((data.expiresAt - now) / 1000)),
+        });
       } else {
         this.locks.delete(nodeId);
       }
@@ -64,6 +80,15 @@ class InMemoryMemoryStore {
 
   async getCachedAstSymbols(nodeId: string): Promise<any | null> {
     return this.astCache.get(nodeId) || null;
+  }
+
+  async addEvent(event: TeamBroadcastEvent): Promise<void> {
+    this.events.unshift(event);
+    if (this.events.length > 50) this.events.pop();
+  }
+
+  async getEvents(): Promise<TeamBroadcastEvent[]> {
+    return this.events;
   }
 }
 
@@ -154,21 +179,28 @@ export async function releaseNodeLock(
   return { success };
 }
 
-export async function getAllNodeLocks(
+export async function getAllNodeLocksWithTTL(
   credentials?: { redisUrl?: string; redisToken?: string }
-): Promise<{ locks: Record<string, string>; provider: 'upstash_redis' | 'in_memory' }> {
+): Promise<{ locks: Array<{ nodeId: string; holderId: string; ttlSec: number }>; provider: 'upstash_redis' | 'in_memory' }> {
   const redis = getUpstashRedis(credentials?.redisUrl, credentials?.redisToken);
 
   if (redis) {
     try {
       const keys = await redis.keys('omnigraph:lock:node:*');
-      const locks: Record<string, string> = {};
+      const locks: Array<{ nodeId: string; holderId: string; ttlSec: number }> = [];
       if (keys.length > 0) {
         const values = await redis.mget(...keys);
-        keys.forEach((k, idx) => {
+        for (let i = 0; i < keys.length; i++) {
+          const k = keys[i];
+          const holderId = String(values[i]);
           const nodeId = k.replace('omnigraph:lock:node:', '');
-          if (values[idx]) locks[nodeId] = String(values[idx]);
-        });
+          const ttlSec = await redis.ttl(k);
+          locks.push({
+            nodeId,
+            holderId,
+            ttlSec: Math.max(1, ttlSec),
+          });
+        }
       }
       return { locks, provider: 'upstash_redis' };
     } catch {
@@ -176,7 +208,7 @@ export async function getAllNodeLocks(
     }
   }
 
-  const locks = await localStore.getAllLocks();
+  const locks = await localStore.getAllLocksWithTTL();
   return { locks, provider: 'in_memory' };
 }
 
@@ -285,4 +317,48 @@ export async function searchSemanticAstNodes(
   topNodes.forEach((n) => (scoreMap[n.id] = n.score > 0 ? n.score : 0.85));
 
   return { nodeIds, scoreMap, provider: 'ast_keyword_match' };
+}
+
+/**
+ * 4. Shared Multiplayer Team Broadcast Feed
+ */
+export async function pushTeamBroadcastEvent(
+  event: TeamBroadcastEvent,
+  credentials?: { redisUrl?: string; redisToken?: string }
+): Promise<{ success: boolean; provider: 'upstash_redis' | 'in_memory' }> {
+  const redis = getUpstashRedis(credentials?.redisUrl, credentials?.redisToken);
+
+  if (redis) {
+    try {
+      await redis.lpush('omnigraph:multiplayer:feed', JSON.stringify(event));
+      await redis.ltrim('omnigraph:multiplayer:feed', 0, 49);
+      return { success: true, provider: 'upstash_redis' };
+    } catch {
+      // Fallback
+    }
+  }
+
+  await localStore.addEvent(event);
+  return { success: true, provider: 'in_memory' };
+}
+
+export async function fetchTeamBroadcastEvents(
+  credentials?: { redisUrl?: string; redisToken?: string }
+): Promise<{ events: TeamBroadcastEvent[]; provider: 'upstash_redis' | 'in_memory' }> {
+  const redis = getUpstashRedis(credentials?.redisUrl, credentials?.redisToken);
+
+  if (redis) {
+    try {
+      const rawEvents = await redis.lrange('omnigraph:multiplayer:feed', 0, 49);
+      const events: TeamBroadcastEvent[] = rawEvents.map((r: any) =>
+        typeof r === 'string' ? JSON.parse(r) : r
+      );
+      return { events, provider: 'upstash_redis' };
+    } catch {
+      // Fallback
+    }
+  }
+
+  const events = await localStore.getEvents();
+  return { events, provider: 'in_memory' };
 }

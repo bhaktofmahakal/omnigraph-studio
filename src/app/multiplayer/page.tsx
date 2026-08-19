@@ -17,9 +17,21 @@ import {
   Edit2,
   X,
   Share2,
+  Database,
+  Clock,
+  Activity,
+  ShieldCheck,
+  Sparkles,
+  Loader2,
 } from 'lucide-react';
 import { useOmniStore } from '@/lib/store/useOmniStore';
 import { Collaborator } from '@/lib/types';
+
+interface LiveLockData {
+  nodeId: string;
+  holderId: string;
+  ttlSec: number;
+}
 
 export default function MultiplayerPage() {
   const collaborators = useOmniStore((state) => state.collaborators);
@@ -31,14 +43,16 @@ export default function MultiplayerPage() {
   const nodes = useOmniStore((state) => state.nodes);
 
   const [isSimulating, setIsSimulating] = useState(false);
-  const [lockedNodes, setLockedNodes] = useState<Record<string, string>>({}); // nodeId -> collaboratorId
+  const [activeLocks, setActiveLocks] = useState<LiveLockData[]>([]);
+  const [redisStatus, setRedisStatus] = useState<'online' | 'fallback' | 'checking'>('checking');
+  const [teamEvents, setTeamEvents] = useState<any[]>([]);
   const [pingMessage, setPingMessage] = useState('');
   const [pingSent, setPingSent] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
 
-  // New collaborator form state
+  // Form states
   const [newCollabName, setNewCollabName] = useState('');
   const [newCollabRole, setNewCollabRole] = useState('Frontend Engineer');
   const [newCollabColor, setNewCollabColor] = useState('#818CF8');
@@ -49,14 +63,53 @@ export default function MultiplayerPage() {
   const [profileRole, setProfileRole] = useState(currentUser?.role || 'Lead AI Engineer');
 
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const lockPollRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Simulated cursor movement across active AST nodes
+  // Poll Upstash Redis for active distributed locks and team events
+  const syncWithRedis = async () => {
+    try {
+      const [locksRes, eventsRes] = await Promise.all([
+        fetch('/api/memory', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'get_locks_with_ttl' }),
+        }),
+        fetch('/api/memory', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'get_team_events' }),
+        }),
+      ]);
+
+      if (locksRes.ok) {
+        const data = await locksRes.json();
+        setActiveLocks(data.locks || []);
+        setRedisStatus(data.provider === 'upstash_redis' ? 'online' : 'fallback');
+      }
+
+      if (eventsRes.ok) {
+        const data = await eventsRes.json();
+        setTeamEvents(data.events || []);
+      }
+    } catch {
+      setRedisStatus('fallback');
+    }
+  };
+
+  useEffect(() => {
+    syncWithRedis();
+    lockPollRef.current = setInterval(syncWithRedis, 2500);
+    return () => {
+      if (lockPollRef.current) clearInterval(lockPollRef.current);
+    };
+  }, []);
+
+  // Simulated cursor movements
   useEffect(() => {
     if (isSimulating) {
       intervalRef.current = setInterval(() => {
         collaborators.forEach((c) => {
           if (c.id !== 'collab-3') {
-            // Don't move "You"
             const dx = (Math.random() - 0.5) * 40;
             const dy = (Math.random() - 0.5) * 40;
             const randomNode = nodes.length > 0 ? nodes[Math.floor(Math.random() * nodes.length)]?.id : undefined;
@@ -80,37 +133,82 @@ export default function MultiplayerPage() {
   }, [isSimulating, collaborators, nodes, updateCollaboratorCursor]);
 
   const toggleNodeLock = async (nodeId: string, collaboratorId: string) => {
-    const isCurrentlyLocked = lockedNodes[nodeId] === collaboratorId;
+    const existingLock = activeLocks.find((l) => l.nodeId === nodeId);
+    const isCurrentlyLocked = existingLock?.holderId === collaboratorId;
 
     if (isCurrentlyLocked) {
       await fetch('/api/memory', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'release_lock', nodeId, holderId: collaboratorId }),
-      }).catch(() => {});
-
-      setLockedNodes((prev) => {
-        const next = { ...prev };
-        delete next[nodeId];
-        return next;
       });
-    } else {
-      const res = await fetch('/api/memory', {
+
+      // Post release event
+      await fetch('/api/memory', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'acquire_lock', nodeId, holderId: collaboratorId, ttlSec: 60 }),
-      }).catch(() => null);
+        body: JSON.stringify({
+          action: 'post_team_event',
+          event: {
+            id: `evt-${Date.now()}`,
+            timestamp: new Date().toLocaleTimeString(),
+            user: currentUser?.name || 'Engineer',
+            role: currentUser?.role || 'Lead',
+            action: 'lock_released',
+            nodeId,
+            message: `Released lock on AST Node ${nodeId}`,
+          },
+        }),
+      });
 
-      if (res && res.ok) {
-        setLockedNodes((prev) => ({ ...prev, [nodeId]: collaboratorId }));
-      } else {
-        setLockedNodes((prev) => ({ ...prev, [nodeId]: collaboratorId }));
-      }
+      syncWithRedis();
+    } else {
+      await fetch('/api/memory', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'acquire_lock', nodeId, holderId: collaboratorId, ttlSec: 45 }),
+      });
+
+      // Post acquire event
+      await fetch('/api/memory', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'post_team_event',
+          event: {
+            id: `evt-${Date.now()}`,
+            timestamp: new Date().toLocaleTimeString(),
+            user: currentUser?.name || 'Engineer',
+            role: currentUser?.role || 'Lead',
+            action: 'lock_acquired',
+            nodeId,
+            message: `Acquired distributed 45s atomic lock on AST Node ${nodeId}`,
+          },
+        }),
+      });
+
+      syncWithRedis();
     }
   };
 
-  const sendSwarmPing = () => {
+  const sendSwarmPing = async () => {
     if (!pingMessage.trim()) return;
+
+    const event = {
+      id: `ping-${Date.now()}`,
+      timestamp: new Date().toLocaleTimeString(),
+      user: currentUser?.name || 'Lead Engineer',
+      role: currentUser?.role || 'Architecture',
+      action: 'ping_sent',
+      message: pingMessage.trim(),
+    };
+
+    await fetch('/api/memory', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'post_team_event', event }),
+    });
+
     addLog({
       id: `ping-${Date.now()}`,
       timestamp: new Date().toLocaleTimeString(),
@@ -118,10 +216,12 @@ export default function MultiplayerPage() {
       agentName: 'Multiplayer Hub',
       phaseAngle: 0,
       level: 'info',
-      message: `🔔 Swarm Ping from ${currentUser?.name || 'User'}: ${pingMessage}`,
+      message: `🔔 Swarm Broadcast from ${currentUser?.name || 'User'}: ${pingMessage}`,
     });
+
     setPingSent(true);
     setPingMessage('');
+    syncWithRedis();
     setTimeout(() => setPingSent(false), 2000);
   };
 
@@ -147,9 +247,8 @@ export default function MultiplayerPage() {
       role: newCollabRole.trim(),
       color: newCollabColor,
       avatar: initials || 'DEV',
-      cursor: { x: Math.floor(200 + Math.random() * 400), y: Math.floor(150 + Math.random() * 300) },
-      activeNodeId: nodes[0]?.id || 'Canvas',
       status: 'online',
+      cursor: { x: Math.floor(200 + Math.random() * 400), y: Math.floor(150 + Math.random() * 300) },
     };
 
     addCollaborator(newCollab);
@@ -158,7 +257,8 @@ export default function MultiplayerPage() {
   };
 
   const handleSaveProfile = () => {
-    updateUserProfile(profileName, profileRole);
+    if (!profileName.trim()) return;
+    updateUserProfile(profileName.trim(), profileRole.trim());
     setIsProfileModalOpen(false);
   };
 
@@ -167,342 +267,356 @@ export default function MultiplayerPage() {
       {/* Subheader */}
       <div className="min-h-9 py-1.5 sm:py-0 flex flex-wrap items-center justify-between px-2.5 sm:px-3 bg-[#161b22] border border-[#30363d] rounded-xl font-mono text-xs shrink-0 gap-2">
         <div className="flex items-center gap-2 min-w-0">
-          <Users className="w-4 h-4 text-[#a371f7] shrink-0" />
+          <Users className="w-4 h-4 text-[#58a6ff] shrink-0" />
           <h1 className="font-bold text-[#e6edf3] truncate text-xs sm:text-xs">
-            Multiplayer Room Session (#mesh-8921)
+            Live Multiplayer Mesh & Upstash Distributed Node Lock Hub
           </h1>
-          <span className="text-[10px] text-[#8b949e] hidden sm:inline shrink-0">Screen 8</span>
+          <span className="text-[10px] text-[#8b949e] hidden sm:inline shrink-0">Screen 7</span>
         </div>
 
-        <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
-          {/* Copy Invite Link */}
+        {/* Redis Cloud Status Badge */}
+        <div className="flex items-center gap-2">
+          <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-mono font-bold border ${
+            redisStatus === 'online'
+              ? 'bg-[#238636]/20 border-[#238636] text-[#3fb950]'
+              : 'bg-[#388bfd]/20 border-[#388bfd] text-[#58a6ff]'
+          }`}>
+            <Database className="w-3.5 h-3.5" />
+            <span>{redisStatus === 'online' ? 'Upstash Redis Locked' : 'Local Memory Synced'}</span>
+          </div>
+
           <button
             onClick={handleCopyInviteLink}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#21262d] hover:bg-[#30363d] text-[#58a6ff] hover:text-[#79c0ff] border border-[#58a6ff]/30 text-xs font-mono transition-all"
-            title="Copy invite link to share with teammates"
+            className="flex items-center gap-1.5 px-3 py-1 bg-[#21262d] hover:bg-[#30363d] text-[#58a6ff] border border-[#30363d] rounded-lg text-xs font-mono font-bold transition-all shadow shrink-0"
           >
             {copiedLink ? <Check className="w-3.5 h-3.5 text-[#3fb950]" /> : <Share2 className="w-3.5 h-3.5" />}
-            <span>{copiedLink ? 'Link Copied!' : 'Invite Teammate'}</span>
+            <span>{copiedLink ? 'Link Copied!' : 'Share Room'}</span>
           </button>
-
-          {/* Add Collaborator Button */}
-          <button
-            onClick={() => setIsAddModalOpen(true)}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#238636]/20 hover:bg-[#238636]/30 text-[#3fb950] border border-[#238636]/40 text-xs font-mono transition-all font-semibold"
-          >
-            <UserPlus className="w-3.5 h-3.5" />
-            <span>Add Member</span>
-          </button>
-
-          {/* Simulation Toggle */}
-          <button
-            onClick={() => setIsSimulating(!isSimulating)}
-            className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-lg text-xs font-mono font-medium transition-all min-h-[32px] ${
-              isSimulating
-                ? 'bg-[#d29922] text-[#0d1117] shadow-[0_0_10px_rgba(210,153,34,0.3)]'
-                : 'bg-[#21262d] hover:bg-[#30363d] text-[#8b949e] hover:text-[#e6edf3] border border-[#30363d]'
-            }`}
-          >
-            {isSimulating ? <Pause className="w-3 h-3 shrink-0" /> : <Play className="w-3 h-3 shrink-0" />}
-            <span className="hidden xs:inline">{isSimulating ? 'Stop Sim' : 'Simulate Co-Presence'}</span>
-            <span className="xs:hidden">{isSimulating ? 'Stop' : 'Sim'}</span>
-          </button>
-
-          <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#16291e] border border-[#238636] text-[#3fb950] text-[11px] font-mono shrink-0">
-            <Wifi className={`w-3 h-3 text-[#3fb950] ${isSimulating ? 'animate-pulse' : ''}`} />
-            <span>&lt;15ms Mesh</span>
-          </div>
         </div>
       </div>
 
-      {/* Collaborators Active Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-        {collaborators.map((c) => {
-          const isYou = c.id === 'collab-3';
-          const activeNodeLabel = nodes.find((n) => n.id === c.activeNodeId)?.label || c.activeNodeId || 'Graph Canvas';
+      {/* Main Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 sm:gap-4 shrink-0">
+        {/* Left Column: Collaborator Mesh Cards */}
+        <div className="col-span-1 lg:col-span-4 space-y-3">
+          <div className="p-3.5 rounded-xl bg-[#161b22] border border-[#30363d] space-y-3 shadow-xl">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-mono font-bold text-[#e6edf3] flex items-center gap-1.5">
+                <Wifi className="w-3.5 h-3.5 text-[#3fb950]" />
+                <span>Active Collaborators ({collaborators.length})</span>
+              </span>
+              <button
+                onClick={() => setIsAddModalOpen(true)}
+                className="flex items-center gap-1 px-2 py-0.5 bg-[#21262d] hover:bg-[#30363d] text-[#58a6ff] border border-[#30363d] rounded text-[11px] font-mono transition-all"
+              >
+                <UserPlus className="w-3 h-3" />
+                <span>Add Teammate</span>
+              </button>
+            </div>
 
-          return (
-            <div
-              key={c.id}
-              className={`p-4 sm:p-5 rounded-xl bg-[#161b22] border transition-all space-y-3 shadow-xl relative overflow-hidden ${
-                isYou ? 'border-[#388bfd]/50 ring-1 ring-[#388bfd]/30' : 'border-[#30363d]'
-              }`}
-            >
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2.5 min-w-0">
+            <div className="space-y-2">
+              {collaborators.map((c) => {
+                const isYou = c.id === currentUser?.id;
+                const heldLocks = activeLocks.filter((l) => l.holderId === c.id);
+
+                return (
                   <div
-                    className="w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center font-bold text-white shadow shrink-0 text-xs sm:text-sm"
-                    style={{ backgroundColor: c.color }}
+                    key={c.id}
+                    className={`p-2.5 rounded-xl border flex items-center justify-between transition-all ${
+                      isYou ? 'bg-[#1c2438] border-[#58a6ff]' : 'bg-[#0d1117] border-[#30363d]'
+                    }`}
                   >
-                    {c.avatar}
-                  </div>
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-1.5">
-                      <h3 className="font-bold text-xs sm:text-sm text-[#e6edf3] truncate">{c.name}</h3>
-                      {isYou && (
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div
+                        className="w-8 h-8 rounded-lg flex items-center justify-center font-mono font-bold text-xs shrink-0 text-white shadow"
+                        style={{ backgroundColor: c.color }}
+                      >
+                        {c.avatar}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs font-bold text-[#e6edf3] truncate">{c.name}</span>
+                          {isYou && (
+                            <span className="text-[9px] bg-[#58a6ff]/20 text-[#58a6ff] px-1 py-0.2 rounded font-mono font-bold">
+                              YOU
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-[10px] text-[#8b949e] block truncate font-mono">{c.role}</span>
+                        {heldLocks.length > 0 && (
+                          <div className="flex items-center gap-1 mt-1 text-[9px] text-[#d2a8ff] font-mono font-bold">
+                            <Lock className="w-2.5 h-2.5" />
+                            <span>Holds {heldLocks.length} AST locks</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1">
+                      {isYou ? (
                         <button
                           onClick={() => setIsProfileModalOpen(true)}
-                          className="p-1 hover:bg-[#21262d] rounded text-[#8b949e] hover:text-[#58a6ff] transition-colors"
-                          title="Edit your profile"
+                          className="p-1 text-[#8b949e] hover:text-[#e6edf3] rounded hover:bg-[#30363d]"
+                          title="Edit Your Profile"
                         >
-                          <Edit2 className="w-3 h-3" />
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => removeCollaborator(c.id)}
+                          className="p-1 text-[#8b949e] hover:text-[#f85149] rounded hover:bg-[#30363d]"
+                          title="Remove Collaborator"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       )}
                     </div>
-                    <span className="text-[11px] text-[#8b949e] font-mono block truncate">{c.role}</span>
                   </div>
-                </div>
+                );
+              })}
+            </div>
 
-                <div className="flex items-center gap-1">
-                  <span
-                    className={`px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-mono uppercase border shrink-0 ${
-                      c.status === 'editing'
-                        ? 'bg-[#16291e] border-[#238636] text-[#3fb950]'
-                        : c.status === 'reviewing'
-                        ? 'bg-[#58a6ff]/10 border-[#58a6ff]/30 text-[#58a6ff]'
-                        : 'bg-[#0d1117] border-[#30363d] text-[#8b949e]'
-                    }`}
-                  >
-                    {c.status}
-                  </span>
-
-                  {!isYou && (
-                    <button
-                      onClick={() => removeCollaborator(c.id)}
-                      className="p-1 rounded hover:bg-[#2d191e] text-[#8b949e] hover:text-[#f85149] transition-colors"
-                      title="Remove member"
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              <div className="p-2.5 sm:p-3 rounded-lg bg-[#0d1117] border border-[#30363d] text-xs font-mono text-[#8b949e] space-y-1">
-                <div className="flex justify-between items-center gap-2">
-                  <span className="shrink-0 text-[11px]">Active Focus:</span>
-                  <span className="text-[#58a6ff] font-semibold truncate text-[11px]">{activeNodeLabel}</span>
-                </div>
-                <div className="flex justify-between items-center gap-2">
-                  <span className="shrink-0 text-[11px]">Cursor:</span>
-                  <span className="text-[#e6edf3] text-[11px]">
-                    ({Math.round(c.cursor.x)}, {Math.round(c.cursor.y)})
-                  </span>
-                </div>
-              </div>
-
-              {/* Node Lock Controls */}
+            {/* Simulation Toggle */}
+            <div className="pt-2 border-t border-[#30363d] flex items-center justify-between">
+              <span className="text-[11px] text-[#8b949e] font-mono">Simulate Cursor Activity</span>
               <button
-                onClick={() => toggleNodeLock(c.activeNodeId || 'node-active', c.id)}
-                className={`flex items-center justify-center gap-1.5 w-full px-3 py-1.5 rounded-lg text-xs font-mono font-medium transition-all min-h-[32px] ${
-                  lockedNodes[c.activeNodeId || 'node-active'] === c.id
-                    ? 'bg-[#d29922]/10 text-[#d29922] border border-[#d29922]/40'
-                    : 'bg-[#21262d] hover:bg-[#30363d] text-[#8b949e] border border-[#30363d]'
+                onClick={() => setIsSimulating(!isSimulating)}
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-mono font-bold transition-all ${
+                  isSimulating
+                    ? 'bg-[#238636] text-white'
+                    : 'bg-[#21262d] text-[#8b949e] hover:text-[#e6edf3]'
                 }`}
               >
-                {lockedNodes[c.activeNodeId || 'node-active'] === c.id ? (
-                  <>
-                    <Lock className="w-3 h-3 text-[#d29922]" />
-                    <span className="truncate">Locked: {activeNodeLabel}</span>
-                  </>
-                ) : (
-                  <>
-                    <Unlock className="w-3 h-3" />
-                    <span className="truncate">Lock: {activeNodeLabel}</span>
-                  </>
-                )}
+                {isSimulating ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3" />}
+                <span>{isSimulating ? 'Active' : 'Start Simulation'}</span>
               </button>
             </div>
-          );
-        })}
-      </div>
+          </div>
 
-      {/* Swarm Ping Input */}
-      <div className="p-3.5 sm:p-4 rounded-xl bg-[#161b22] border border-[#30363d] space-y-3 shadow-xl">
-        <h2 className="text-xs font-bold uppercase text-[#8b949e] tracking-wider flex items-center gap-2">
-          <Radio className="w-3.5 h-3.5 text-[#a371f7]" />
-          Swarm Ping — Broadcast Message to Live Agent Terminal
-        </h2>
-        <div className="flex items-center gap-2">
-          <input
-            type="text"
-            placeholder="Type a team broadcast message (e.g. 'Reviewing auth.ts refactor before PR merge')..."
-            value={pingMessage}
-            onChange={(e) => setPingMessage(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && sendSwarmPing()}
-            className="flex-1 bg-[#0d1117] border border-[#30363d] focus:border-[#a371f7] rounded-lg px-3 py-2 text-xs font-mono text-[#e6edf3] placeholder-[#6e7681] focus:outline-none transition-colors min-w-0"
-          />
-          <button
-            onClick={sendSwarmPing}
-            disabled={!pingMessage.trim()}
-            className={`flex items-center gap-1.5 px-3.5 sm:px-4 py-2 rounded-lg font-bold text-xs transition-all shrink-0 min-h-[36px] ${
-              pingSent
-                ? 'bg-[#3fb950] text-[#0d1117]'
-                : 'bg-[#a371f7] hover:bg-[#8b5cf6] text-white disabled:opacity-40 disabled:cursor-not-allowed'
-            }`}
-          >
-            <Send className="w-3.5 h-3.5" />
-            <span>{pingSent ? 'Broadcasted!' : 'Send'}</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Active Node Locks Display */}
-      {Object.keys(lockedNodes).length > 0 && (
-        <div className="p-3.5 sm:p-4 rounded-xl bg-[#161b22] border border-[#d29922]/30 space-y-2 shadow-xl">
-          <h2 className="text-xs font-bold uppercase text-[#d29922] tracking-wider flex items-center gap-2">
-            <Lock className="w-3.5 h-3.5" />
-            Active Node Locks ({Object.keys(lockedNodes).length})
-          </h2>
-          <div className="space-y-1.5 text-xs font-mono">
-            {Object.entries(lockedNodes).map(([nodeId, collabId]) => {
-              const collab = collaborators.find((c) => c.id === collabId);
-              return (
-                <div
-                  key={nodeId}
-                  className="flex flex-wrap items-center justify-between p-2 rounded-lg bg-[#0d1117] border border-[#30363d] gap-1"
-                >
-                  <span className="text-[#d29922] font-semibold">{nodeId}</span>
-                  <span className="text-[#8b949e]">
-                    Locked by <span className="text-[#e6edf3] font-medium">{collab?.name || collabId}</span>
-                  </span>
-                </div>
-              );
-            })}
+          {/* Swarm Broadcast Input */}
+          <div className="p-3.5 rounded-xl bg-[#161b22] border border-[#30363d] space-y-2.5 shadow-xl font-mono">
+            <span className="text-xs font-bold text-[#e6edf3] flex items-center gap-1.5">
+              <Radio className="w-3.5 h-3.5 text-[#d29922]" />
+              <span>Broadcast to Team Mesh</span>
+            </span>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                placeholder="Send swarm alert or lock request..."
+                value={pingMessage}
+                onChange={(e) => setPingMessage(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && sendSwarmPing()}
+                className="flex-1 bg-[#0d1117] border border-[#30363d] rounded-lg px-2.5 py-1.5 text-xs text-[#e6edf3] focus:outline-none focus:border-[#58a6ff]"
+              />
+              <button
+                onClick={sendSwarmPing}
+                disabled={!pingMessage.trim()}
+                className="px-3 py-1.5 rounded-lg bg-[#238636] hover:bg-[#2ea043] text-white text-xs font-bold transition-all disabled:opacity-40"
+              >
+                <Send className="w-3.5 h-3.5" />
+              </button>
+            </div>
+            {pingSent && (
+              <span className="text-[10px] text-[#3fb950] block font-bold">✓ Broadcasted to Upstash Redis Feed!</span>
+            )}
           </div>
         </div>
-      )}
 
-      {/* Add Member Modal */}
-      {isAddModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-[#161b22] border border-[#30363d] rounded-2xl w-full max-w-md p-5 space-y-4 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-[#30363d] pb-3">
-              <h3 className="font-bold text-sm text-[#e6edf3] flex items-center gap-2 font-mono">
-                <UserPlus className="w-4 h-4 text-[#3fb950]" />
-                Add Team Collaborator
-              </h3>
-              <button
-                onClick={() => setIsAddModalOpen(false)}
-                className="p-1 rounded hover:bg-[#21262d] text-[#8b949e] hover:text-[#e6edf3]"
-              >
-                <X className="w-4 h-4" />
-              </button>
+        {/* Right Column: Distributed AST Node Locks & Live Redis Stream */}
+        <div className="col-span-1 lg:col-span-8 space-y-3 sm:space-y-4">
+          {/* AST Distributed Lock Matrix */}
+          <div className="p-3.5 sm:p-4 rounded-xl bg-[#161b22] border border-[#30363d] space-y-3 shadow-xl font-mono">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Lock className="w-4 h-4 text-[#d2a8ff]" />
+                <h2 className="text-xs font-bold text-[#e6edf3]">
+                  Distributed AST Node Lock Matrix ({nodes.length} nodes registered)
+                </h2>
+              </div>
+              <span className="text-[10px] text-[#8b949e]">
+                Atomic TTL: 45s per lock
+              </span>
             </div>
 
-            <div className="space-y-3 font-mono text-xs">
-              <div className="space-y-1">
-                <label className="text-[#8b949e]">Teammate Name:</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Jordan Miller"
-                  value={newCollabName}
-                  onChange={(e) => setNewCollabName(e.target.value)}
-                  className="w-full bg-[#0d1117] border border-[#30363d] focus:border-[#58a6ff] rounded-lg p-2 text-[#e6edf3] focus:outline-none"
-                />
-              </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-64 overflow-y-auto custom-scrollbar pr-1">
+              {nodes.map((node) => {
+                const lockInfo = activeLocks.find((l) => l.nodeId === node.id);
+                const isLocked = !!lockInfo;
+                const holder = collaborators.find((c) => c.id === lockInfo?.holderId);
+                const isHeldByYou = lockInfo?.holderId === currentUser?.id;
 
-              <div className="space-y-1">
-                <label className="text-[#8b949e]">Role:</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Backend Lead / QA Architect"
-                  value={newCollabRole}
-                  onChange={(e) => setNewCollabRole(e.target.value)}
-                  className="w-full bg-[#0d1117] border border-[#30363d] focus:border-[#58a6ff] rounded-lg p-2 text-[#e6edf3] focus:outline-none"
-                />
-              </div>
+                return (
+                  <div
+                    key={node.id}
+                    className={`p-2.5 rounded-xl border flex items-center justify-between transition-all ${
+                      isLocked
+                        ? isHeldByYou
+                          ? 'bg-[#1c2438] border-[#58a6ff]'
+                          : 'bg-[#2d191e] border-[#f85149]'
+                        : 'bg-[#0d1117] border-[#30363d] hover:border-[#58a6ff]/40'
+                    }`}
+                  >
+                    <div className="min-w-0 pr-2">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs font-bold text-[#e6edf3] truncate">{node.label}</span>
+                        <span className="text-[9px] text-[#8b949e] uppercase">({node.type})</span>
+                      </div>
+                      <span className="text-[10px] text-[#6e7681] block truncate">{node.path}</span>
+                      {isLocked && (
+                        <div className="flex items-center gap-1 mt-1 text-[9px] font-bold">
+                          <Clock className="w-2.5 h-2.5 text-[#d2a8ff]" />
+                          <span className={isHeldByYou ? 'text-[#58a6ff]' : 'text-[#f85149]'}>
+                            Locked by {holder?.name || lockInfo.holderId} ({lockInfo.ttlSec}s left)
+                          </span>
+                        </div>
+                      )}
+                    </div>
 
-              <div className="space-y-1">
-                <label className="text-[#8b949e]">Avatar Color:</label>
-                <div className="flex gap-2 pt-1">
-                  {['#818CF8', '#34D399', '#F472B6', '#FBBF24', '#38BDF8', '#A78BFA'].map((col) => (
                     <button
-                      key={col}
-                      type="button"
-                      onClick={() => setNewCollabColor(col)}
-                      className={`w-7 h-7 rounded-full transition-transform ${
-                        newCollabColor === col ? 'scale-125 ring-2 ring-white' : ''
+                      onClick={() => toggleNodeLock(node.id, currentUser.id)}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1 transition-all shrink-0 ${
+                        isLocked
+                          ? isHeldByYou
+                            ? 'bg-[#f85149]/20 text-[#f85149] border border-[#f85149] hover:bg-[#f85149]/30'
+                            : 'bg-[#30363d] text-[#8b949e] cursor-not-allowed opacity-60'
+                          : 'bg-[#238636] hover:bg-[#2ea043] text-white shadow'
                       }`}
-                      style={{ backgroundColor: col }}
-                    />
-                  ))}
-                </div>
+                      disabled={isLocked && !isHeldByYou}
+                    >
+                      {isLocked ? (
+                        <>
+                          <Unlock className="w-3 h-3" />
+                          <span>Release</span>
+                        </>
+                      ) : (
+                        <>
+                          <Lock className="w-3 h-3" />
+                          <span>Lock AST</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Live Multiplayer Event Feed (Upstash Redis Synced) */}
+          <div className="p-3.5 sm:p-4 rounded-xl bg-[#161b22] border border-[#30363d] space-y-2.5 shadow-xl font-mono">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Activity className="w-4 h-4 text-[#3fb950]" />
+                <h2 className="text-xs font-bold text-[#e6edf3]">
+                  Live Upstash Redis Collaborative Event Stream
+                </h2>
               </div>
+              <span className="text-[10px] text-[#3fb950] bg-[#238636]/20 px-2 py-0.5 rounded font-bold">
+                Synced in Real Time
+              </span>
             </div>
 
-            <div className="flex justify-end gap-2 pt-2 border-t border-[#30363d]">
-              <button
-                onClick={() => setIsAddModalOpen(false)}
-                className="px-3 py-1.5 rounded-lg bg-[#21262d] text-[#8b949e] hover:text-[#e6edf3] text-xs font-mono"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleCreateCollaborator}
-                disabled={!newCollabName.trim()}
-                className="px-4 py-1.5 rounded-lg bg-[#3fb950] hover:bg-[#2ea043] text-[#0d1117] font-bold text-xs font-mono disabled:opacity-40"
-              >
-                Add Collaborator
+            <div className="space-y-1.5 max-h-48 overflow-y-auto custom-scrollbar pr-1 text-xs">
+              {teamEvents.length > 0 ? (
+                teamEvents.map((evt, idx) => (
+                  <div
+                    key={idx}
+                    className="p-2 rounded-lg bg-[#0d1117] border border-[#21262d] flex items-center justify-between text-[11px]"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-[#8b949e] text-[10px] shrink-0">{evt.timestamp}</span>
+                      <span className="font-bold text-[#58a6ff] shrink-0">{evt.user}:</span>
+                      <span className="text-[#e6edf3] truncate">{evt.message}</span>
+                    </div>
+                    <span className="text-[9px] text-[#d2a8ff] bg-[#d2a8ff]/10 px-1.5 py-0.5 rounded shrink-0 uppercase font-bold">
+                      {evt.action}
+                    </span>
+                  </div>
+                ))
+              ) : (
+                <div className="p-3 text-center text-[#8b949e] text-[11px]">
+                  No broadcast events recorded yet. Send a swarm ping or acquire an AST lock!
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Add Teammate Modal */}
+      {isAddModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-black/80 backdrop-blur-sm">
+          <div className="w-full max-w-sm bg-[#161b22] border border-[#30363d] rounded-2xl p-4 space-y-3 font-mono text-xs">
+            <div className="flex items-center justify-between pb-2 border-b border-[#30363d]">
+              <span className="font-bold text-[#e6edf3]">Add New Collaborator</span>
+              <button onClick={() => setIsAddModalOpen(false)} className="text-[#8b949e] hover:text-[#e6edf3]">
+                ✕
               </button>
             </div>
+            <div>
+              <label className="text-[11px] text-[#8b949e] block mb-1">Full Name</label>
+              <input
+                type="text"
+                placeholder="e.g. Alex Chen"
+                value={newCollabName}
+                onChange={(e) => setNewCollabName(e.target.value)}
+                className="w-full bg-[#0d1117] border border-[#30363d] rounded p-2 text-[#e6edf3] focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="text-[11px] text-[#8b949e] block mb-1">Role</label>
+              <input
+                type="text"
+                value={newCollabRole}
+                onChange={(e) => setNewCollabRole(e.target.value)}
+                className="w-full bg-[#0d1117] border border-[#30363d] rounded p-2 text-[#e6edf3] focus:outline-none"
+              />
+            </div>
+            <button
+              onClick={handleCreateCollaborator}
+              disabled={!newCollabName.trim()}
+              className="w-full py-2 bg-[#238636] hover:bg-[#2ea043] text-white font-bold rounded-lg transition-all"
+            >
+              Add Teammate
+            </button>
           </div>
         </div>
       )}
 
       {/* Edit Profile Modal */}
       {isProfileModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-[#161b22] border border-[#30363d] rounded-2xl w-full max-w-md p-5 space-y-4 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-[#30363d] pb-3">
-              <h3 className="font-bold text-sm text-[#e6edf3] flex items-center gap-2 font-mono">
-                <Edit2 className="w-4 h-4 text-[#58a6ff]" />
-                Edit Your Profile
-              </h3>
-              <button
-                onClick={() => setIsProfileModalOpen(false)}
-                className="p-1 rounded hover:bg-[#21262d] text-[#8b949e] hover:text-[#e6edf3]"
-              >
-                <X className="w-4 h-4" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-black/80 backdrop-blur-sm">
+          <div className="w-full max-w-sm bg-[#161b22] border border-[#30363d] rounded-2xl p-4 space-y-3 font-mono text-xs">
+            <div className="flex items-center justify-between pb-2 border-b border-[#30363d]">
+              <span className="font-bold text-[#e6edf3]">Edit Your Profile</span>
+              <button onClick={() => setIsProfileModalOpen(false)} className="text-[#8b949e] hover:text-[#e6edf3]">
+                ✕
               </button>
             </div>
-
-            <div className="space-y-3 font-mono text-xs">
-              <div className="space-y-1">
-                <label className="text-[#8b949e]">Your Display Name:</label>
-                <input
-                  type="text"
-                  value={profileName}
-                  onChange={(e) => setProfileName(e.target.value)}
-                  className="w-full bg-[#0d1117] border border-[#30363d] focus:border-[#58a6ff] rounded-lg p-2 text-[#e6edf3] focus:outline-none"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-[#8b949e]">Your Role:</label>
-                <input
-                  type="text"
-                  value={profileRole}
-                  onChange={(e) => setProfileRole(e.target.value)}
-                  className="w-full bg-[#0d1117] border border-[#30363d] focus:border-[#58a6ff] rounded-lg p-2 text-[#e6edf3] focus:outline-none"
-                />
-              </div>
+            <div>
+              <label className="text-[11px] text-[#8b949e] block mb-1">Display Name</label>
+              <input
+                type="text"
+                value={profileName}
+                onChange={(e) => setProfileName(e.target.value)}
+                className="w-full bg-[#0d1117] border border-[#30363d] rounded p-2 text-[#e6edf3] focus:outline-none"
+              />
             </div>
-
-            <div className="flex justify-end gap-2 pt-2 border-t border-[#30363d]">
-              <button
-                onClick={() => setIsProfileModalOpen(false)}
-                className="px-3 py-1.5 rounded-lg bg-[#21262d] text-[#8b949e] hover:text-[#e6edf3] text-xs font-mono"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSaveProfile}
-                className="px-4 py-1.5 rounded-lg bg-[#58a6ff] hover:bg-[#79c0ff] text-[#0d1117] font-bold text-xs font-mono"
-              >
-                Save Profile
-              </button>
+            <div>
+              <label className="text-[11px] text-[#8b949e] block mb-1">Role</label>
+              <input
+                type="text"
+                value={profileRole}
+                onChange={(e) => setProfileRole(e.target.value)}
+                className="w-full bg-[#0d1117] border border-[#30363d] rounded p-2 text-[#e6edf3] focus:outline-none"
+              />
             </div>
+            <button
+              onClick={handleSaveProfile}
+              disabled={!profileName.trim()}
+              className="w-full py-2 bg-[#238636] hover:bg-[#2ea043] text-white font-bold rounded-lg transition-all"
+            >
+              Save Profile
+            </button>
           </div>
         </div>
       )}
