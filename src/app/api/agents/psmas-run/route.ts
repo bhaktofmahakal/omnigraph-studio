@@ -4,18 +4,16 @@ import { DJANGO_SCENARIO_STEPS, INITIAL_AGENTS } from '@/lib/agents/psmasEngine'
 export const runtime = 'nodejs';
 
 /**
- * 2026 Autonomous Multi-Agent Swarm Engine (PSMAS v2.0)
+ * 2026 Autonomous Multi-Agent Swarm Engine (PSMAS v3.0 SOTA)
  * 
- * Features:
- * - Dynamic Tool Calling & AST Code Grounding
- * - Heterogeneous Multi-Model Routing (Groq LPU High-Speed + OrcaRouter Deep Reasoning)
- * - Structured Handoff Protocols between Phase-Staggered Agents (S^1 Manifold)
- * - Reflexion & Self-Correction Feedback Loops
- * - Cryptographic SHA-256 Safe Execution Barrier
- * - Zero-Failure Resilient Fallback Engine
+ * Powered by OrcaRouter Universal Gateway & Groq LPU:
+ * - Mayor / Architect: Claude 3.5 Sonnet / Claude 3.7 / GPT-4o (via OrcaRouter)
+ * - Polecat / CodeWriter: Qwen 2.5 Coder 32B / Claude 3.5 Sonnet (via OrcaRouter / Groq)
+ * - Witness / TestRunner: DeepSeek-R1 / o3-mini (via OrcaRouter)
+ * - Refinery / Security: GPT-4o / Llama 3.3 70B (via OrcaRouter / Groq)
  */
 
-const AGENT_SPECIFICATIONS: Record<
+export const AGENT_SPECIFICATIONS: Record<
   string,
   {
     role: string;
@@ -27,28 +25,28 @@ const AGENT_SPECIFICATIONS: Record<
 > = {
   architect: {
     role: 'Staff Systems Architect & DAG Planner',
-    modelDefault: 'groq/llama-3.3-70b-versatile',
+    modelDefault: 'anthropic/claude-3.5-sonnet',
     theta: '0 rad (0°)',
     tools: ['inspect_ast_dag', 'analyze_call_graph', 'plan_manifold_trajectory', 'estimate_tokenfold_compression'],
     capabilities: ['Topological dependency ordering', 'Progressive disclosure bounds', 'Multi-file change scoping'],
   },
   codewriter: {
     role: 'Lead Compiler & Code Synthesis Engineer',
-    modelDefault: 'groq/llama-3.3-70b-versatile',
+    modelDefault: 'qwen/qwen-2.5-coder-32b-instruct',
     theta: 'π/2 rad (90°)',
     tools: ['fetch_node_source', 'synthesize_surgical_diff', 'validate_ast_syntax', 'emit_unified_hunk'],
     capabilities: ['Zero-drift patch generation', 'Surgical hunk splicing', 'AST signature preservation'],
   },
   testrunner: {
     role: 'SWE-bench Verification & Test Synthesis Lead',
-    modelDefault: 'groq/llama-3.3-70b-versatile',
+    modelDefault: 'deepseek/deepseek-r1',
     theta: 'π rad (180°)',
     tools: ['generate_unit_assertions', 'execute_synthetic_test_suite', 'calculate_regression_coverage', 'evaluate_swebench_spec'],
     capabilities: ['Invariant boundary validation', 'Edge case fuzzing', 'Assertion-driven handoff'],
   },
   security: {
     role: 'Principal Security Architect & Safe Barrier Auditor',
-    modelDefault: 'groq/llama-3.3-70b-versatile',
+    modelDefault: 'openai/gpt-4o',
     theta: '3π/2 rad (270°)',
     tools: ['scan_cwe_vulnerabilities', 'verify_context_isolation', 'audit_rbac_boundaries', 'generate_sha256_seal'],
     capabilities: ['OWASP Top 10 SAST audit', 'Memory leak detection', 'Cryptographic patch signing'],
@@ -128,18 +126,17 @@ function generateDeterministicAgentResponse(
 export async function GET() {
   return NextResponse.json({
     status: 'success',
-    version: '2026.2-agentic-swarm',
-    engine: 'Phase-Staggered Multi-Agent Swarm (PSMAS) with Dynamic Tool Calling',
-    gateway: 'Groq LPU Ultra-Low Latency + OrcaRouter Universal Gateway',
-    agents: AGENT_SPECIFICATIONS,
-    manifold: {
-      domain: 'S^1 [0, 2π)',
-      epsilonWindow: 'π/4 (0.785 rad)',
-      reflexionMaxRetries: 3,
+    version: '2026.2-heterogeneous-swarm',
+    engine: 'Phase-Staggered Multi-Agent Swarm (PSMAS) with OrcaRouter & Groq Unified Gateway',
+    gateways: {
+      orcarouter: 'https://api.orcarouter.ai/v1 (Routes Claude, GPT, DeepSeek, Qwen)',
+      groq: 'https://api.groq.com/openai/v1 (Direct Fast LPU Inference)',
     },
-    providers: {
-      groq: Boolean(process.env.GROQ_API_KEY),
-      orcarouter: Boolean(process.env.ORCAROUTER_API_KEY),
+    defaultModels: {
+      architect: 'anthropic/claude-3.5-sonnet',
+      codewriter: 'qwen/qwen-2.5-coder-32b-instruct',
+      testrunner: 'deepseek/deepseek-r1',
+      security: 'openai/gpt-4o',
     },
   });
 }
@@ -155,29 +152,32 @@ export async function POST(req: Request) {
       previousAgentOutput,
       apiKey,
       model,
+      baseUrl,
     } = body;
 
     const agentRole = activeAgent.toLowerCase();
     const spec = AGENT_SPECIFICATIONS[agentRole] || AGENT_SPECIFICATIONS.architect;
     const selectedModel = model || spec.modelDefault;
 
-    // Detect endpoint
-    const isGroqModel =
-      selectedModel.startsWith('groq/') ||
-      selectedModel.includes('llama') ||
-      selectedModel.includes('mixtral');
+    // Detect if this model should route to Groq LPU or OrcaRouter
+    const isGroqModel = selectedModel.startsWith('groq/');
     const isGroqKey = apiKey && apiKey.startsWith('gsk_');
-    const shouldUseGroq =
-      isGroqModel ||
-      isGroqKey ||
-      (!process.env.ORCAROUTER_API_KEY && Boolean(process.env.GROQ_API_KEY));
+    const shouldUseGroq = isGroqModel || isGroqKey || (!process.env.ORCAROUTER_API_KEY && Boolean(process.env.GROQ_API_KEY));
 
     const effectiveApiKey =
       apiKey ||
       (shouldUseGroq ? process.env.GROQ_API_KEY : process.env.ORCAROUTER_API_KEY) ||
       process.env.GROQ_API_KEY;
 
-    // Construct 2026 Agentic System Prompt with AST Grounding & Tool Schemas
+    let endpoint = baseUrl || 'https://api.orcarouter.ai/v1/chat/completions';
+    let targetModel = selectedModel;
+
+    if (shouldUseGroq || (effectiveApiKey && effectiveApiKey.startsWith('gsk_'))) {
+      endpoint = 'https://api.groq.com/openai/v1/chat/completions';
+      targetModel = selectedModel.replace(/^groq\//, '') || 'llama-3.3-70b-versatile';
+    }
+
+    // Construct 2026 Agentic System Prompt with AST Grounding
     const systemPrompt = `You are the ${spec.role} (Phase angle θ = ${spec.theta}) in the OmniGraph PSMAS Multi-Agent Swarm.
 Available Agent Tools: [${spec.tools.join(', ')}]
 Core Capabilities: ${spec.capabilities.join('; ')}
@@ -199,7 +199,7 @@ ${previousAgentOutput.slice(0, 800)}
 
 EXECUTION PROTOCOL (2026 Autonomous Agentic Standard):
 1. State your high-level intent and call relevant AST tools using \`[ToolCall: tool_name(args)]\`.
-2. Analyze the code invariants and compute progressive disclosure paths.
+2. Analyze code invariants and compute progressive disclosure bounds.
 ${
   agentRole === 'codewriter'
     ? `3. You MUST output precise, valid Unified Git Diff hunks using exact headers:
@@ -219,23 +219,14 @@ Provide a concise 1-sentence explanation for each hunk.`
 }
 4. Conclude with a compressed handoff summary for the next agent along the manifold.`;
 
+    const userMessage =
+      prompt ||
+      `Execute autonomous ${activeAgent.toUpperCase()} phase for task on ${
+        nodeContext?.label || 'active codebase'
+      }.`;
+
     if (effectiveApiKey) {
-      const encoder = new TextEncoder();
-      let endpoint = 'https://api.orcarouter.ai/v1/chat/completions';
-      let targetModel = selectedModel;
-
-      if (shouldUseGroq || (effectiveApiKey && effectiveApiKey.startsWith('gsk_'))) {
-        endpoint = 'https://api.groq.com/openai/v1/chat/completions';
-        targetModel = selectedModel.replace(/^groq\//, '') || 'llama-3.3-70b-versatile';
-      }
-
       try {
-        const userMessage =
-          prompt ||
-          `Execute autonomous ${activeAgent.toUpperCase()} phase for task on ${
-            nodeContext?.label || 'active codebase'
-          }.`;
-
         const res = await fetch(endpoint, {
           method: 'POST',
           headers: {
@@ -248,28 +239,13 @@ Provide a concise 1-sentence explanation for each hunk.`
               { role: 'system', content: systemPrompt },
               { role: 'user', content: userMessage },
             ],
-            temperature: 0.2,
             stream: true,
+            temperature: 0.2,
           }),
         });
 
         if (res.ok && res.body) {
-          const stream = new ReadableStream({
-            async start(controller) {
-              const reader = res.body!.getReader();
-              const decoder = new TextDecoder();
-
-              while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-                const chunk = decoder.decode(value);
-                controller.enqueue(encoder.encode(chunk));
-              }
-              controller.close();
-            },
-          });
-
-          return new Response(stream, {
+          return new Response(res.body, {
             headers: {
               'Content-Type': 'text/event-stream',
               'Cache-Control': 'no-cache',
@@ -278,22 +254,22 @@ Provide a concise 1-sentence explanation for each hunk.`
           });
         }
       } catch {
-        // Fall through to deterministic generator if fetch fails
+        // Fallback to deterministic generator
       }
     }
 
-    // High-precision deterministic fallback streaming
-    const lines = generateDeterministicAgentResponse(agentRole, nodeContext, prompt);
+    // ── Resilient High-Precision Deterministic Fallback ──
+    const fallbackLines = generateDeterministicAgentResponse(agentRole, nodeContext, prompt);
     const encoder = new TextEncoder();
 
     const stream = new ReadableStream({
       async start(controller) {
-        for (const line of lines) {
-          const sseEvent = `data: ${JSON.stringify({
-            choices: [{ delta: { content: line + '\n' } }],
-          })}\n\n`;
-          controller.enqueue(encoder.encode(sseEvent));
-          await new Promise((r) => setTimeout(r, 60));
+        for (const line of fallbackLines) {
+          const sseData = JSON.stringify({
+            choices: [{ delta: { content: `${line}\n\n` } }],
+          });
+          controller.enqueue(encoder.encode(`data: ${sseData}\n\n`));
+          await new Promise((r) => setTimeout(r, 50));
         }
         controller.enqueue(encoder.encode('data: [DONE]\n\n'));
         controller.close();
@@ -309,7 +285,7 @@ Provide a concise 1-sentence explanation for each hunk.`
     });
   } catch (err: any) {
     return NextResponse.json(
-      { error: `Swarm Engine Failed: ${err.message || String(err)}` },
+      { error: err.message || 'Multi-agent invocation failed' },
       { status: 500 }
     );
   }

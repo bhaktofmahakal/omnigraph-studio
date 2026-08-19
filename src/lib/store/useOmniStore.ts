@@ -313,12 +313,19 @@ export const useOmniStore = create<OmniStoreState>((set, get) => ({
     if (get().isAgentRunning) return;
     set({ isAgentRunning: true });
 
-    // Retrieve client BYOK keys if configured
+    // Retrieve client BYOK keys & per-agent heterogeneous models from OrcaRouter & Groq
     const providerMode = typeof window !== 'undefined' ? localStorage.getItem('omnigraph_provider_mode') || 'platform' : 'platform';
     const orcaKey = typeof window !== 'undefined' ? localStorage.getItem('omnigraph_orca_key') || '' : '';
+    const orcaBaseUrl = typeof window !== 'undefined' ? localStorage.getItem('omnigraph_orca_url') || 'https://api.orcarouter.ai/v1' : 'https://api.orcarouter.ai/v1';
     const groqKey = typeof window !== 'undefined' ? localStorage.getItem('omnigraph_groq_key') || '' : '';
     const effectiveKey = providerMode === 'byok' ? (orcaKey || groqKey) : undefined;
-    const preferredModel = typeof window !== 'undefined' ? localStorage.getItem('omnigraph_orca_model') || 'openai/gpt-4o-mini' : 'openai/gpt-4o-mini';
+    const storedAgentModels = typeof window !== 'undefined' ? localStorage.getItem('omnigraph_agent_models') : null;
+    const agentModels: Record<string, string> = storedAgentModels ? JSON.parse(storedAgentModels) : {
+      architect: 'anthropic/claude-3.5-sonnet',
+      codewriter: 'qwen/qwen-2.5-coder-32b-instruct',
+      testrunner: 'deepseek/deepseek-r1',
+      security: 'openai/gpt-4o',
+    };
 
     // Agent execution order (circular manifold sweep)
     const agentPhases: { id: AgentRoleId; angle: number; angleDeg: number }[] = [
@@ -450,8 +457,9 @@ export const useOmniStore = create<OmniStoreState>((set, get) => ({
           body: JSON.stringify({
             activeAgent: phase.id,
             nodeContext: selectedNode ? { label: selectedNode.label, path: selectedNode.path, tokenCount: selectedNode.tokenCount, compressedTokens: selectedNode.compressedTokens } : undefined,
+            model: agentModels[phase.id] || 'anthropic/claude-3.5-sonnet',
             apiKey: effectiveKey,
-            model: preferredModel,
+            baseUrl: orcaBaseUrl,
             prompt,
           }),
         });
