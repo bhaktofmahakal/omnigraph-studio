@@ -340,6 +340,40 @@ export const useOmniStore = create<OmniStoreState>((set, get) => ({
     let totalInputTokens = get().telemetry.totalInputTokens;
     let totalOutputTokens = get().telemetry.totalOutputTokens;
 
+    // 1. Live Upstash Vector Semantic Search for Code Context Grounding
+    const targetGoal = promptOverride || get().activeScenario.description;
+    try {
+      const vectorRes = await fetch('/api/memory', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'vector_search',
+          query: targetGoal,
+          nodes: get().nodes,
+        }),
+      });
+      if (vectorRes.ok) {
+        const vData = await vectorRes.json();
+        const topNodeNames = (vData.nodeIds || []).map((id: string) => {
+          const n = get().nodes.find(node => node.id === id);
+          return n ? n.label : id;
+        }).slice(0, 3);
+
+        get().addLog({
+          id: `log-${Date.now()}-vector`,
+          timestamp: new Date().toLocaleTimeString(),
+          agentId: 'architect',
+          agentName: 'Mayor Agent',
+          phaseAngle: 0,
+          level: 'traversal',
+          message: `[Upstash Vector] Searched 1536-dim Hybrid Index → Discovered ${vData.nodeIds?.length || 0} relevant AST symbols: [${topNodeNames.join(', ')}]`,
+          tokenDelta: 24,
+        });
+      }
+    } catch {
+      // Graceful fallback
+    }
+
     for (let i = 0; i < agentPhases.length; i++) {
       if (!get().isAgentRunning) break;
 
@@ -355,14 +389,24 @@ export const useOmniStore = create<OmniStoreState>((set, get) => ({
       };
       const opRole = roleToBeadRole[phase.id] || 'mayor';
 
-      // Update matching Bead task to in_progress
-      set({
-        beads: get().beads.map((b) =>
-          b.assignedRole === opRole && b.status === 'pending'
-            ? { ...b, status: 'in_progress' }
-            : b
-        ),
-      });
+      // Update matching Bead task to in_progress & sync to Upstash Redis
+      const updatedBeads = get().beads.map((b) =>
+        b.assignedRole === opRole && b.status === 'pending'
+          ? { ...b, status: 'in_progress' as const }
+          : b
+      );
+      set({ beads: updatedBeads });
+
+      // Persist Beads DAG state to Upstash Redis in background
+      fetch('/api/memory', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'persist_beads',
+          sessionId: 'active-session',
+          beads: updatedBeads,
+        }),
+      }).catch(() => {});
 
       // Update phase angle and activate agent
       set({

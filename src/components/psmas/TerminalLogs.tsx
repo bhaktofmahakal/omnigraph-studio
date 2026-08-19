@@ -4,6 +4,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useOmniStore } from '@/lib/store/useOmniStore';
 import { Terminal, Trash2, Filter, Copy, Check, Radio, Cpu, Sparkles, Download, ArrowDown } from 'lucide-react';
 import { LogLevel } from '@/lib/types';
+import { MarkdownRenderer } from '@/components/common/MarkdownRenderer';
 
 const LEVEL_COLORS: Record<LogLevel, { badge: string; text: string }> = {
   info: { badge: 'bg-zinc-800 text-zinc-300 border-zinc-700', text: 'text-zinc-300' },
@@ -197,7 +198,7 @@ export const TerminalLogs: React.FC = () => {
                   </div>
                 ) : (
                   <div className={`mt-1.5 text-xs whitespace-pre-wrap break-words leading-relaxed ${styles.text}`}>
-                    {log.message}
+                    <MarkdownRenderer content={log.message} />
                   </div>
                 )}
 
