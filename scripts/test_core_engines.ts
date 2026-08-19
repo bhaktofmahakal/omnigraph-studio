@@ -12,7 +12,8 @@
  */
 
 import { parseUnifiedDiffToHunks, reconcileApprovedHunks, computePatchHash, parseCodeToHunks } from '../src/lib/diff/patchEngine';
-import { DJANGO_SCENARIO_STEPS, INITIAL_AGENTS } from '../src/lib/agents/psmasEngine';
+import { INITIAL_AGENTS } from '../src/lib/agents/psmasEngine';
+import { createDynamicBeadsForRepo, getSchedulableBeads, BeadTask } from '../src/lib/agents/beadsEngine';
 import { DiffHunk } from '../src/lib/types';
 
 let totalTests = 0;
@@ -66,8 +67,8 @@ export function handleRequest(req: Request) {
   assert(parsedHunks[0].lines.some(l => l.type === 'deletion'), 'Diff hunk should contain deletion lines');
 
   // Test patch hash computation
-  const hash = computePatchHash(parsedHunks);
-  assert(hash.startsWith('0x'), 'computePatchHash should generate valid cryptographic safe barrier hash');
+  const hash = await computePatchHash(parsedHunks);
+  assert(/^[0-9a-f]{16}$/.test(hash), 'computePatchHash should generate a 16-char SHA-256 hex digest');
 
   // Test accepted hunk reconciliation
   const acceptedHunk: DiffHunk = {
@@ -163,7 +164,6 @@ export class PaymentProcessor {
   ];
 
   assert(INITIAL_AGENTS.length === 4, 'PSMAS Swarm should initialize exactly 4 distinct specialized agent roles');
-  assert(DJANGO_SCENARIO_STEPS.length >= 4, 'Deterministic scenario steps should support all 4 phase handoffs');
 
   for (let i = 0; i < expectedPhases.length; i++) {
     const p = expectedPhases[i];
@@ -173,7 +173,55 @@ export class PaymentProcessor {
   }
 
   // ──────────────────────────────────────────────────────────────────────────
-  // TEST SUITE 4: GitHub PR Multi-File RFC Patch Formatter
+  // TEST SUITE 5: Beads DAG State Machine & Topological Scheduling
+  // ──────────────────────────────────────────────────────────────────────────
+  console.log('\n🧪 [TEST SUITE 5] Beads DAG State Machine (getSchedulableBeads)');
+
+  const beads = createDynamicBeadsForRepo(
+    'test-repo',
+    [
+      { path: 'src/index.ts', name: 'index.ts' },
+      { path: 'test/unit.test.ts', name: 'unit.test.ts' },
+    ],
+    'Fix auth bug'
+  );
+
+  assert(beads.length === 4, 'createDynamicBeadsForRepo should create 4 beads (mayor/polecat/witness/refinery)');
+  const roles = beads.map((b) => b.assignedRole);
+  assert(roles.includes('mayor') && roles.includes('polecat') && roles.includes('witness') && roles.includes('refinery'), 'all 4 operational roles present');
+  assert(beads[0].status === 'completed', 'mayor bead should start completed (seeds the DAG)');
+  assert(beads[1].dependencies.includes(beads[0].id), 'polecat bead should depend on mayor bead');
+  assert(beads[2].dependencies.includes(beads[1].id), 'witness bead should depend on polecat bead');
+  assert(beads[3].dependencies.includes(beads[2].id), 'refinery bead should depend on witness bead');
+
+  // DAG transition: mayor completed, polecat in_progress -> nothing schedulable yet (witness is blocked by in_progress polecat)
+  let schedulable = getSchedulableBeads(beads);
+  assert(schedulable.length === 0, 'with polecat in_progress, no pending bead should be schedulable (DAG invariant)');
+
+  // Mark polecat completed -> witness becomes schedulable
+  const progressed: BeadTask[] = beads.map((b) =>
+    b.id === beads[1].id ? { ...b, status: 'completed' as const, completedAt: new Date().toISOString() } : b
+  );
+  schedulable = getSchedulableBeads(progressed);
+  assert(schedulable.length === 1 && schedulable[0].id === beads[2].id, 'after polecat completes, witness is the only schedulable bead');
+
+  // Mark witness completed -> refinery becomes schedulable
+  const progressed2: BeadTask[] = progressed.map((b) =>
+    b.id === beads[2].id ? { ...b, status: 'completed' as const, completedAt: new Date().toISOString() } : b
+  );
+  schedulable = getSchedulableBeads(progressed2);
+  assert(schedulable.length === 1 && schedulable[0].id === beads[3].id, 'after witness completes, refinery is the only schedulable bead');
+
+  // Blocked bead should never schedule even if pending (dep not complete)
+  const blockedGraph: BeadTask[] = [
+    { ...beads[2], status: 'pending' },
+    { ...beads[3], status: 'pending' },
+  ];
+  schedulable = getSchedulableBeads(blockedGraph);
+  assert(schedulable.length === 0, 'pending beads with unmet dependencies must never schedule (deadlock-free guard)');
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // TEST SUITE 6: GitHub PR Multi-File RFC Patch Formatter
   // ──────────────────────────────────────────────────────────────────────────
   console.log('\n🧪 [TEST SUITE 4] Unified RFC .patch Bundle & PR Formatter');
 

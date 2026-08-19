@@ -4,6 +4,7 @@
  */
 
 const BASE_URL = 'https://omnigraph-app-kohl.vercel.app';
+export {};
 
 let totalTests = 0;
 let passedTests = 0;
@@ -18,6 +19,10 @@ function assert(condition: boolean, testName: string, details?: string) {
     failedTests++;
     console.error(`  ✗ FAIL: ${testName}${details ? ` -> ${details}` : ''}`);
   }
+}
+
+function errMsg(err: unknown) {
+  return err instanceof Error ? err.message : String(err);
 }
 
 async function runLiveTests() {
@@ -37,8 +42,8 @@ async function runLiveTests() {
     assert(data.status === 'success', 'Memory status should be "success"');
     assert(Boolean(data.redis), 'Redis connection metadata should be present');
     assert(Boolean(data.vector), 'Vector connection metadata should be present');
-  } catch (err: any) {
-    assert(false, '/api/memory request failed', err.message);
+  } catch (err: unknown) {
+    assert(false, '/api/memory request failed', errMsg(err));
   }
 
   // 2. Test /api/tokens/benchmark (Live AST TokenFold Tokenizer)
@@ -62,8 +67,8 @@ async function runLiveTests() {
     assert(data.aggregate.totalRawTokens > 0, 'Total raw tokens should be > 0');
     assert(data.aggregate.totalCompressedTokens < data.aggregate.totalRawTokens, 'Compressed tokens should be less than raw tokens');
     assert(data.aggregate.netReductionPct > 0, 'Percentage reduction should be > 0%');
-  } catch (err: any) {
-    assert(false, '/api/tokens/benchmark request failed', err.message);
+  } catch (err: unknown) {
+    assert(false, '/api/tokens/benchmark request failed', errMsg(err));
   }
 
   // 3. Test /api/agents/psmas-run (OrcaRouter & Groq Gateway)
@@ -78,8 +83,8 @@ async function runLiveTests() {
     assert(data.engine.includes('PSMAS'), 'Engine name should contain PSMAS');
     assert(Boolean(data.gateways.orcarouter), 'OrcaRouter gateway should be documented');
     assert(Boolean(data.gateways.groq), 'Groq LPU gateway should be documented');
-  } catch (err: any) {
-    assert(false, '/api/agents/psmas-run request failed', err.message);
+  } catch (err: unknown) {
+    assert(false, '/api/agents/psmas-run request failed', errMsg(err));
   }
 
   // 4. Test /api/repo/export-pr (Patch Bundle Generator)
@@ -108,8 +113,8 @@ async function runLiveTests() {
     assert(data.status === 'success', 'Export status should be "success"');
     assert(Boolean(data.patchBundle), 'Generated patch bundle should be returned');
     assert(data.patchBundle.includes('diff --git a/src/index.ts b/src/index.ts'), 'Patch bundle should contain valid git diff syntax');
-  } catch (err: any) {
-    assert(false, '/api/repo/export-pr request failed', err.message);
+  } catch (err: unknown) {
+    assert(false, '/api/repo/export-pr request failed', errMsg(err));
   }
 
   // ──────────────────────────────────────────────────────────────────────────

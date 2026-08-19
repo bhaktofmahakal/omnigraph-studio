@@ -35,7 +35,7 @@ const PRESET_DIRECTIVES = [
     color: '#3fb950',
   },
   {
-    title: 'Upstash Vector Code Retrieval',
+    title: 'Semantic Code Retrieval',
     prompt: 'Perform 1536d semantic vector query across AST graph to locate token optimization hotspots.',
     icon: Database,
     color: '#58a6ff',
@@ -144,7 +144,7 @@ export default function CommandPage() {
         <div className="flex items-center gap-2">
           <span className="text-[10px] text-[#3fb950] bg-[#238636]/20 px-2 py-0.5 rounded font-mono font-bold flex items-center gap-1">
             <span className="w-1.5 h-1.5 rounded-full bg-[#3fb950] animate-pulse"></span>
-            Upstash Vector + Redis Connected
+            Memory & Vector Index Connected
           </span>
         </div>
       </div>

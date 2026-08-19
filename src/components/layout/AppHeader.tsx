@@ -56,7 +56,7 @@ export const AppHeader: React.FC = () => {
               <optgroup label="Active Codebases" className="bg-[#161b22] text-[#8b949e] font-bold">
                 {scenarios.filter(s => !s.id.startsWith('custom-')).map((s) => (
                   <option key={s.id} value={s.id} className="bg-[#161b22] text-[#e6edf3]">
-                    {s.id === 'django-auth-refactor' ? 'django/django (Python Core)' : s.id === 'express-guard-audit' ? 'express-guard (TypeScript Monorepo)' : s.title}
+                    {s.title}
                   </option>
                 ))}
               </optgroup>

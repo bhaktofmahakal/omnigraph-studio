@@ -25,7 +25,7 @@ export interface BeadTask {
   completedAt?: string;
   toolCallsExecuted: {
     tool: string;
-    params: Record<string, any>;
+    params: Record<string, unknown>;
     resultSummary: string;
     timestamp: string;
   }[];
@@ -38,91 +38,6 @@ export interface BeadTaskGraph {
   completedBeadIds: string[];
   totalMemoryTokensSaved: number;
 }
-
-export const INITIAL_BEAD_TASKS: BeadTask[] = [
-  {
-    id: 'bd-89f1',
-    title: 'AST Call Graph Topology Discovery',
-    description: 'Mayor scans root entry points and computes dependency traversal paths.',
-    status: 'completed',
-    dependencyType: 'parent-child',
-    dependencies: [],
-    targetNodeId: 'mod-auth',
-    targetFile: 'src/router/auth.ts',
-    assignedRole: 'mayor',
-    tokenCost: 48,
-    createdAt: new Date(Date.now() - 30000).toISOString(),
-    completedAt: new Date(Date.now() - 25000).toISOString(),
-    toolCallsExecuted: [
-      {
-        tool: 'inspect_ast_dag',
-        params: { rootNode: 'mod-auth', depth: 3 },
-        resultSummary: 'Discovered 4 module vertices, 8 function call sites, 0 cyclic imports.',
-        timestamp: '12:00:01',
-      },
-    ],
-    reflexionAttempts: 0,
-  },
-  {
-    id: 'bd-42c8',
-    title: 'Surgical JWT Claim Expiration Patch',
-    description: 'Polecat-1 synthesizes minimal unified diff hunk for verifyJwtToken claims.',
-    status: 'in_progress',
-    dependencyType: 'blocks',
-    dependencies: ['bd-89f1'],
-    targetNodeId: 'fn-verifyjwt',
-    targetFile: 'src/router/auth.ts',
-    diffHunkId: 'hunk-001',
-    assignedRole: 'polecat',
-    tokenCost: 85,
-    createdAt: new Date(Date.now() - 20000).toISOString(),
-    toolCallsExecuted: [
-      {
-        tool: 'fetch_node_source',
-        params: { nodeId: 'fn-verifyjwt' },
-        resultSummary: 'Loaded AST snippet (lines 14-38, 240 bytes).',
-        timestamp: '12:00:04',
-      },
-      {
-        tool: 'synthesize_surgical_diff',
-        params: { file: 'src/router/auth.ts', targetSymbol: 'verifyJwtToken' },
-        resultSummary: 'Emitted Unified Hunk: @@ -14,5 +14,9 @@ with safe expiration check.',
-        timestamp: '12:00:06',
-      },
-    ],
-    reflexionAttempts: 0,
-  },
-  {
-    id: 'bd-7e3a',
-    title: 'SWE-bench Invariant Assertion Suite',
-    description: 'Witness evaluates regression boundaries and checks edge-case expiration.',
-    status: 'pending',
-    dependencyType: 'blocks',
-    dependencies: ['bd-42c8'],
-    targetNodeId: 'assert-session-bleed',
-    targetFile: 'test/auth.test.ts',
-    assignedRole: 'witness',
-    tokenCost: 52,
-    createdAt: new Date(Date.now() - 15000).toISOString(),
-    toolCallsExecuted: [],
-    reflexionAttempts: 0,
-  },
-  {
-    id: 'bd-91b4',
-    title: 'Cryptographic Safe Barrier Reconcile',
-    description: 'Refinery checks semantic conflicts and signs SHA-256 seal for IDE merge.',
-    status: 'pending',
-    dependencyType: 'parent-child',
-    dependencies: ['bd-7e3a'],
-    targetNodeId: 'mod-auth',
-    targetFile: 'src/router/auth.ts',
-    assignedRole: 'refinery',
-    tokenCost: 35,
-    createdAt: new Date(Date.now() - 10000).toISOString(),
-    toolCallsExecuted: [],
-    reflexionAttempts: 0,
-  },
-];
 
 /**
  * Computes topological execution order of Bead tasks based on blocking dependencies.
@@ -212,8 +127,8 @@ export function createDynamicBeadsForRepo(
 
   const refineryBead: BeadTask = {
     id: `bd-${baseId}-04`,
-    title: `[Refinery] Safe Barrier Reconciler & Cryptographic SHA-256 Gate`,
-    description: `Verify semantic patch integrity, seal cryptographic hash, and queue for Monaco IDE merge.`,
+    title: `[Refinery] Safe Barrier Reconciler & Patch Integrity Gate`,
+    description: `Verify accepted hunks, compute the patch checksum, and queue for Monaco IDE merge.`,
     status: 'pending',
     dependencyType: 'parent-child',
     dependencies: [witnessBead.id],

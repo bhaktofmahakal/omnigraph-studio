@@ -9,17 +9,22 @@ import {
   ExternalLink,
   Loader2,
   X,
-  ShieldCheck,
   GitBranch,
-  FileCode,
   Terminal,
-  Sparkles,
 } from 'lucide-react';
 import { useOmniStore } from '@/lib/store/useOmniStore';
 
 interface ExportPRModalProps {
   isOpen: boolean;
   onClose: () => void;
+}
+
+interface ExportResult {
+  patchBundle?: string;
+  prUrl?: string;
+  prNumber?: number;
+  branch?: string;
+  error?: string;
 }
 
 export const ExportPRModal: React.FC<ExportPRModalProps> = ({ isOpen, onClose }) => {
@@ -29,30 +34,33 @@ export const ExportPRModal: React.FC<ExportPRModalProps> = ({ isOpen, onClose })
 
   const [githubToken, setGithubToken] = useState('');
   const [repoUrl, setRepoUrl] = useState('');
-  const [branchName, setBranchName] = useState(`omnigraph-patch-${Date.now().toString().slice(-4)}`);
+  const [branchName, setBranchName] = useState('');
   const [prTitle, setPrTitle] = useState('feat(omnigraph): apply autonomous multi-agent surgical diffs');
-  const [prBody, setPrBody] = useState('Surgical diffs generated along S^1 manifold and verified by Witness/Refinery.');
+  const [prBody] = useState('Surgical diffs generated along S^1 manifold and verified by Witness/Refinery.');
   
   const [isExporting, setIsExporting] = useState(false);
-  const [exportResult, setExportResult] = useState<any | null>(null);
+  const [exportResult, setExportResult] = useState<ExportResult | null>(null);
   const [copiedPatch, setCopiedPatch] = useState(false);
   const [copiedCmd, setCopiedCmd] = useState(false);
 
   // Dynamically derive the repository URL from the active ingested scenario or localStorage
   useEffect(() => {
-    if (typeof window !== 'undefined') {
+    let cancelled = false;
+    const derive = async () => {
+      if (typeof window === 'undefined') return;
       const stored = localStorage.getItem('omnigraph_active_repo_url');
-      if (stored) {
-        setRepoUrl(stored);
-        return;
+      let url = stored || '';
+      if (!url && activeScenario?.title?.includes('/')) {
+        url = `https://github.com/${activeScenario.title.trim()}`;
       }
-    }
-
-    if (activeScenario?.title && activeScenario.title.includes('/')) {
-      setRepoUrl(`https://github.com/${activeScenario.title.trim()}`);
-    } else {
-      setRepoUrl('');
-    }
+      if (cancelled) return;
+      setRepoUrl(url);
+      setBranchName((prev) => prev || `omnigraph-patch-${Date.now().toString().slice(-4)}`);
+    };
+    derive();
+    return () => {
+      cancelled = true;
+    };
   }, [activeScenario]);
 
   if (!isOpen) return null;
@@ -76,7 +84,7 @@ export const ExportPRModal: React.FC<ExportPRModalProps> = ({ isOpen, onClose })
         }),
       });
 
-      const data = await res.json();
+      const data: ExportResult = await res.json();
       setExportResult(data);
 
       if (mode === 'download_patch' && data.patchBundle) {
@@ -89,8 +97,8 @@ export const ExportPRModal: React.FC<ExportPRModalProps> = ({ isOpen, onClose })
         a.click();
         URL.revokeObjectURL(url);
       }
-    } catch (err: any) {
-      setExportResult({ error: err.message || 'Export failed' });
+    } catch (err) {
+      setExportResult({ error: err instanceof Error ? err.message : 'Export failed' });
     } finally {
       setIsExporting(false);
     }
@@ -148,7 +156,7 @@ export const ExportPRModal: React.FC<ExportPRModalProps> = ({ isOpen, onClose })
           </div>
           <div>
             <span className="text-[10px] text-[#8b949e] block">Safe Barrier</span>
-            <span className="font-bold text-[#d2a8ff]">SHA-256 Verified</span>
+            <span className="font-bold text-[#d2a8ff]">{diffHunks.filter(h => h.status === 'accepted').length} hunks approved</span>
           </div>
         </div>
 

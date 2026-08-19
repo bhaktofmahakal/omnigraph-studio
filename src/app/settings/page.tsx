@@ -27,49 +27,65 @@ import {
 type ConnectionStatus = 'idle' | 'testing' | 'connected' | 'failed';
 
 const ORCA_MODEL_OPTIONS = [
-  { value: 'anthropic/claude-3.5-sonnet', label: 'Claude 3.5 Sonnet (OrcaRouter - SOTA Coding)' },
-  { value: 'anthropic/claude-3-7-sonnet', label: 'Claude 3.7 Sonnet (OrcaRouter - Hybrid Reasoning)' },
-  { value: 'openai/gpt-4o', label: 'GPT-4o (OrcaRouter - General Frontier)' },
-  { value: 'openai/o3-mini', label: 'o3-mini (OrcaRouter - Invariants & Reasoning)' },
-  { value: 'deepseek/deepseek-r1', label: 'DeepSeek-R1 (OrcaRouter - Deep CoT Reasoning)' },
-  { value: 'qwen/qwen-2.5-coder-32b-instruct', label: 'Qwen 2.5 Coder 32B (OrcaRouter - Surgical Code)' },
-  { value: 'meta-llama/llama-3.3-70b-instruct', label: 'Llama 3.3 70B Instruct (OrcaRouter)' },
-  { value: 'groq/llama-3.3-70b-versatile', label: 'Llama 3.3 70B (Groq LPU - Ultra Fast)' },
-  { value: 'groq/qwen-2.5-coder-32b', label: 'Qwen 2.5 Coder 32B (Groq LPU)' },
+  { value: 'deepseek/deepseek-v4-flash', label: 'DeepSeek V4 Flash (OrcaRouter - Reasoning, $0.147/M)' },
+  { value: 'deepseek/deepseek-v4-pro', label: 'DeepSeek V4 Pro (OrcaRouter - Reasoning, $0.442/M)' },
+  { value: 'qwen/qwen3.7-flash', label: 'Qwen3.7 Flash (OrcaRouter - Vision/Code, $0.03/M)' },
+  { value: 'qwen/qwen3.8-max', label: 'Qwen3.8 Max (OrcaRouter - Frontier, $2/M)' },
+  { value: 'openai/gpt-4.1-nano', label: 'GPT-4.1 Nano (OrcaRouter - Fast, $0.10/M)' },
+  { value: 'openai/gpt-5-mini', label: 'GPT-5 Mini (OrcaRouter - Frontier Mini)' },
+  { value: 'openai/gpt-5.4', label: 'GPT-5.4 (OrcaRouter - Frontier, $5/M)' },
+  { value: 'google/gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash Lite (OrcaRouter - $0.10/M)' },
+  { value: 'google/gemini-3.6-flash', label: 'Gemini 3.6 Flash (OrcaRouter - Vision, $1.50/M)' },
+  { value: 'z-ai/glm-5.3', label: 'GLM 5.3 (OrcaRouter - Reasoning, $1.26/M)' },
+  { value: 'anthropic/claude-sonnet-5', label: 'Claude Sonnet 5 (OrcaRouter - $2/M)' },
+  { value: 'orcarouter/fusion', label: 'OrcaRouter Fusion (Multi-Model Router)' },
+  { value: 'orcarouter/fusion-mini', label: 'OrcaRouter Fusion Mini (Multi-Model Router)' },
+];
+
+const GROQ_MODEL_OPTIONS = [
+  { value: 'groq/qwen3.6-27b', label: 'Qwen3.6 27B (Groq - fast inference)' },
+  { value: 'groq/openai/gpt-oss-120b', label: 'GPT-OSS 120B (Groq - open frontier)' },
+  { value: 'groq/groq/compound', label: 'Compound (Groq - reasoning)' },
+  { value: 'groq/groq/compound-mini', label: 'Compound Mini (Groq - fast reasoning)' },
+];
+
+const AVAILABLE_MODELS = [
+  ...ORCA_MODEL_OPTIONS,
+  ...GROQ_MODEL_OPTIONS,
 ];
 
 const PRESETS = [
   {
-    id: 'sota-heterogeneous',
-    name: '🌟 2026 SOTA Heterogeneous Swarm (Recommended)',
-    desc: 'Claude 3.5 Sonnet (Architect) + Qwen 2.5 Coder (CodeWriter) + DeepSeek-R1 (Witness) + GPT-4o (Security)',
+    id: 'frontier-balanced',
+    name: '⚖️ Frontier Balanced Swarm (Recommended)',
+    desc: 'DeepSeek V4 Pro (Architect) + Qwen3.8 Max (CodeWriter) + DeepSeek V4 Pro (Witness) + GPT-5 Mini (Security)',
     models: {
-      architect: 'anthropic/claude-3.5-sonnet',
-      codewriter: 'qwen/qwen-2.5-coder-32b-instruct',
-      testrunner: 'deepseek/deepseek-r1',
-      security: 'openai/gpt-4o',
+      architect: 'deepseek/deepseek-v4-pro',
+      codewriter: 'qwen/qwen3.8-max',
+      testrunner: 'deepseek/deepseek-v4-pro',
+      security: 'openai/gpt-5-mini',
     },
   },
   {
-    id: 'ultra-speed-lpu',
-    name: '⚡ Ultra-Fast LPU Swarm (Groq LPU)',
-    desc: 'Llama 3.3 70B (Architect) + Qwen 2.5 Coder (CodeWriter) + Llama 3.3 70B (Witness/Security)',
+    id: 'ultra-economy',
+    name: '⚡ Ultra-Fast Economy Swarm',
+    desc: 'DeepSeek V4 Flash (Architect) + Qwen3.7 Flash (CodeWriter) + DeepSeek V4 Flash (Witness) + GPT-4.1 Nano (Security)',
     models: {
-      architect: 'groq/llama-3.3-70b-versatile',
-      codewriter: 'groq/qwen-2.5-coder-32b',
-      testrunner: 'groq/llama-3.3-70b-versatile',
-      security: 'groq/llama-3.3-70b-versatile',
+      architect: 'deepseek/deepseek-v4-flash',
+      codewriter: 'qwen/qwen3.7-flash',
+      testrunner: 'deepseek/deepseek-v4-flash',
+      security: 'openai/gpt-4.1-nano',
     },
   },
   {
-    id: 'deep-reasoning-hybrid',
+    id: 'deep-reasoning',
     name: '🧠 Deep Reasoning & Verification Swarm',
-    desc: 'DeepSeek-R1 (Architect) + Claude 3.5 Sonnet (CodeWriter) + o3-mini (Witness) + DeepSeek-R1 (Security)',
+    desc: 'GLM 5.3 (Architect) + Claude Sonnet 5 (CodeWriter) + DeepSeek V4 Pro (Witness) + GPT-5 Mini (Security)',
     models: {
-      architect: 'deepseek/deepseek-r1',
-      codewriter: 'anthropic/claude-3.5-sonnet',
-      testrunner: 'openai/o3-mini',
-      security: 'deepseek/deepseek-r1',
+      architect: 'z-ai/glm-5.3',
+      codewriter: 'anthropic/claude-sonnet-5',
+      testrunner: 'deepseek/deepseek-v4-pro',
+      security: 'openai/gpt-5-mini',
     },
   },
 ];
@@ -84,15 +100,14 @@ export default function SettingsPage() {
 
   // Per-Agent Role Model Selection through Orca & Groq
   const [agentModels, setAgentModels] = useState({
-    architect: 'anthropic/claude-3.5-sonnet',
-    codewriter: 'qwen/qwen-2.5-coder-32b-instruct',
-    testrunner: 'deepseek/deepseek-r1',
-    security: 'openai/gpt-4o',
+    architect: 'deepseek/deepseek-v4-flash',
+    codewriter: 'qwen/qwen3.7-flash',
+    testrunner: 'deepseek/deepseek-v4-flash',
+    security: 'openai/gpt-4.1-nano',
   });
 
   const [saved, setSaved] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('idle');
-  const [connectionLatency, setConnectionLatency] = useState<number | null>(null);
   const [connectionError, setConnectionError] = useState<string | null>(null);
 
   // System Infrastructure Health Status
@@ -122,20 +137,17 @@ export default function SettingsPage() {
       } catch {}
     }
 
-    // Check built-in Upstash memory & vector status
+    // Check built-in memory & vector status (sanitized — no hostnames, latency, or raw errors)
     fetch('/api/memory')
       .then((res) => res.json())
       .then((data) => {
         setInfraStatus({
-          redis: data.redis?.ping || 'Connected (legal-stingray-96178)',
-          vector: data.vector?.ping || 'Connected (allowed-civet-50009)',
+          redis: data.redis?.status === 'online' ? 'Online' : 'Not configured',
+          vector: data.vector?.status === 'online' ? 'Online' : 'Not configured',
         });
       })
       .catch(() => {
-        setInfraStatus({
-          redis: 'Connected (Built-in)',
-          vector: 'Connected (Built-in)',
-        });
+        setInfraStatus({ redis: 'Unknown', vector: 'Unknown' });
       });
   }, []);
 
@@ -162,13 +174,12 @@ export default function SettingsPage() {
     setOrcaBaseUrl('https://api.orcarouter.ai/v1');
     setGroqKey('');
     setAgentModels({
-      architect: 'anthropic/claude-3.5-sonnet',
-      codewriter: 'qwen/qwen-2.5-coder-32b-instruct',
-      testrunner: 'deepseek/deepseek-r1',
-      security: 'openai/gpt-4o',
+      architect: 'deepseek/deepseek-v4-flash',
+      codewriter: 'qwen/qwen3.7-flash',
+      testrunner: 'deepseek/deepseek-v4-flash',
+      security: 'openai/gpt-4.1-nano',
     });
     setConnectionStatus('idle');
-    setConnectionLatency(null);
   };
 
   const handleApplyPreset = (preset: typeof PRESETS[0]) => {
@@ -181,8 +192,6 @@ export default function SettingsPage() {
   const handleTestConnection = async () => {
     setConnectionStatus('testing');
     setConnectionError(null);
-    setConnectionLatency(null);
-    const startTime = Date.now();
 
     try {
       const res = await fetch('/api/agents/psmas-run', {
@@ -196,20 +205,15 @@ export default function SettingsPage() {
         }),
       });
 
-      const latency = Date.now() - startTime;
-      setConnectionLatency(latency);
-
       if (res.ok) {
         setConnectionStatus('connected');
       } else {
-        const body = await res.text();
         setConnectionStatus('failed');
-        setConnectionError(`HTTP ${res.status}: ${body.slice(0, 100)}`);
+        setConnectionError('Gateway rejected the request. Verify your API key, model, and endpoint are valid.');
       }
-    } catch (err: any) {
-      setConnectionLatency(Date.now() - startTime);
+    } catch {
       setConnectionStatus('failed');
-      setConnectionError(err.message || 'Network error');
+      setConnectionError('Could not reach the AI gateway. Check your network connection and endpoint.');
     }
   };
 
@@ -220,7 +224,7 @@ export default function SettingsPage() {
         <div className="flex items-center gap-2 min-w-0">
           <Settings className="w-4 h-4 text-[#8b949e] shrink-0" />
           <h1 className="font-bold text-[#e6edf3] truncate text-xs sm:text-xs">
-            OrcaRouter & Groq Unified AI Gateway + Upstash Infrastructure
+            AI Gateway & Platform Infrastructure
           </h1>
           <span className="text-[10px] text-[#8b949e] hidden sm:inline shrink-0">Screen 13</span>
         </div>
@@ -247,15 +251,14 @@ export default function SettingsPage() {
                 <Database className="w-4 h-4" />
               </div>
               <div>
-                <span className="font-bold text-[#e6edf3] block">Upstash Redis</span>
+                <span className="font-bold text-[#e6edf3] block">Memory Layer</span>
                 <span className="text-[10px] text-[#8b949e]">Distributed AST Locks & Beads DAG</span>
               </div>
             </div>
             <div className="text-right">
-              <span className="inline-flex items-center gap-1 text-[10px] text-[#3fb950] font-bold">
-                <Check className="w-3 h-3" /> ONLINE
+              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[#3fb950]">
+                <Check className="w-3 h-3" /> {infraStatus.redis}
               </span>
-              <span className="text-[9px] text-[#6e7681] block">{infraStatus.redis}</span>
             </div>
           </div>
 
@@ -265,15 +268,14 @@ export default function SettingsPage() {
                 <Layers className="w-4 h-4" />
               </div>
               <div>
-                <span className="font-bold text-[#e6edf3] block">Upstash Vector</span>
-                <span className="text-[10px] text-[#8b949e]">1536-dim Hybrid AST Index</span>
+                <span className="font-bold text-[#e6edf3] block">Vector Index</span>
+                <span className="text-[10px] text-[#8b949e]">Semantic AST Node Retrieval</span>
               </div>
             </div>
             <div className="text-right">
-              <span className="inline-flex items-center gap-1 text-[10px] text-[#3fb950] font-bold">
-                <Check className="w-3 h-3" /> ONLINE
+              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[#3fb950]">
+                <Check className="w-3 h-3" /> {infraStatus.vector}
               </span>
-              <span className="text-[9px] text-[#6e7681] block">{infraStatus.vector}</span>
             </div>
           </div>
         </div>
@@ -327,7 +329,7 @@ export default function SettingsPage() {
               onChange={(e) => setAgentModels((prev) => ({ ...prev, architect: e.target.value }))}
               className="w-full bg-[#161b22] border border-[#30363d] rounded p-1.5 text-xs text-[#e6edf3] focus:outline-none focus:border-[#58a6ff]"
             >
-              {ORCA_MODEL_OPTIONS.map((opt) => (
+              {AVAILABLE_MODELS.map((opt) => (
                 <option key={opt.value} value={opt.value}>
                   {opt.label}
                 </option>
@@ -347,7 +349,7 @@ export default function SettingsPage() {
               onChange={(e) => setAgentModels((prev) => ({ ...prev, codewriter: e.target.value }))}
               className="w-full bg-[#161b22] border border-[#30363d] rounded p-1.5 text-xs text-[#e6edf3] focus:outline-none focus:border-[#58a6ff]"
             >
-              {ORCA_MODEL_OPTIONS.map((opt) => (
+              {AVAILABLE_MODELS.map((opt) => (
                 <option key={opt.value} value={opt.value}>
                   {opt.label}
                 </option>
@@ -367,7 +369,7 @@ export default function SettingsPage() {
               onChange={(e) => setAgentModels((prev) => ({ ...prev, testrunner: e.target.value }))}
               className="w-full bg-[#161b22] border border-[#30363d] rounded p-1.5 text-xs text-[#e6edf3] focus:outline-none focus:border-[#58a6ff]"
             >
-              {ORCA_MODEL_OPTIONS.map((opt) => (
+              {AVAILABLE_MODELS.map((opt) => (
                 <option key={opt.value} value={opt.value}>
                   {opt.label}
                 </option>
@@ -387,7 +389,7 @@ export default function SettingsPage() {
               onChange={(e) => setAgentModels((prev) => ({ ...prev, security: e.target.value }))}
               className="w-full bg-[#161b22] border border-[#30363d] rounded p-1.5 text-xs text-[#e6edf3] focus:outline-none focus:border-[#58a6ff]"
             >
-              {ORCA_MODEL_OPTIONS.map((opt) => (
+              {AVAILABLE_MODELS.map((opt) => (
                 <option key={opt.value} value={opt.value}>
                   {opt.label}
                 </option>
@@ -495,7 +497,6 @@ export default function SettingsPage() {
         {connectionStatus === 'connected' && (
           <div className="p-2.5 rounded-lg bg-[#238636]/20 border border-[#238636] text-[#3fb950] flex items-center justify-between font-bold">
             <span>✓ Multi-agent gateway is live and responding!</span>
-            <span>Latency: {connectionLatency}ms</span>
           </div>
         )}
 

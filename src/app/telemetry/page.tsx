@@ -55,7 +55,7 @@ export default function TelemetryPage() {
   }, [files.length]);
 
   const agg = benchmarkData?.aggregate;
-  const monthlySavingsUSD = agg ? (agg.netSavingsPerSweep * monthlyPRVolume) : ((0.104 - 0.032) * monthlyPRVolume);
+  const monthlySavingsUSD = agg ? (agg.netSavingsPerSweep * monthlyPRVolume) : 0;
   const annualSavingsUSD = monthlySavingsUSD * 12;
 
   return (
@@ -94,7 +94,7 @@ export default function TelemetryPage() {
         <div className="p-3 sm:p-3.5 rounded-xl bg-[#161b22] border border-[#30363d] shadow">
           <span className="text-[10px] text-[#8b949e] block font-semibold">TOTAL RAW TOKENS</span>
           <div className="text-base sm:text-lg font-bold text-[#f85149] mt-0.5">
-            {agg ? agg.totalRawTokens.toLocaleString() : '24,180'}
+            {agg ? agg.totalRawTokens.toLocaleString() : '—'}
           </div>
           <span className="text-[9px] text-[#6e7681]">Full AST Context ($2.50/M)</span>
         </div>
@@ -102,7 +102,7 @@ export default function TelemetryPage() {
         <div className="p-3 sm:p-3.5 rounded-xl bg-[#161b22] border border-[#30363d] shadow">
           <span className="text-[10px] text-[#8b949e] block font-semibold">TOKENFOLD COMPRESSED</span>
           <div className="text-base sm:text-lg font-bold text-[#3fb950] mt-0.5">
-            {agg ? agg.totalCompressedTokens.toLocaleString() : '6,420'}
+            {agg ? agg.totalCompressedTokens.toLocaleString() : '—'}
           </div>
           <span className="text-[9px] text-[#6e7681]">Bounded Signatures ($0.70/M)</span>
         </div>
@@ -111,9 +111,9 @@ export default function TelemetryPage() {
           <span className="text-[10px] text-[#8b949e] block font-semibold">NET TOKEN REDUCTION</span>
           <div className="text-base sm:text-lg font-bold text-[#58a6ff] mt-0.5 flex items-center gap-1">
             <TrendingDown className="w-4 h-4 text-[#58a6ff]" />
-            <span>{agg ? agg.netReductionPct : '73.4'}%</span>
+            <span>{agg ? agg.netReductionPct : '—'}%</span>
           </div>
-          <span className="text-[9px] text-[#6e7681]">{agg ? agg.netCompressionRatio : '3.8x'} compression ratio</span>
+          <span className="text-[9px] text-[#6e7681]">{agg ? `${agg.netCompressionRatio}x compression ratio` : 'Run a benchmark to measure'}</span>
         </div>
 
         <div className="p-3 sm:p-3.5 rounded-xl bg-[#161b22] border border-[#30363d] shadow">
@@ -163,13 +163,7 @@ export default function TelemetryPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-[#21262d]">
-              {(benchmarkData?.fileMetrics || files.map(f => ({
-                path: f.path,
-                rawTokens: Math.ceil((f.currentCode?.length || 500) / 3.8),
-                compressedTokens: Math.ceil((f.currentCode?.length || 500) / 14),
-                reductionPct: 72.5,
-                savingsUSD: 0.0012,
-              }))).map((fm: any, idx: number) => (
+              {(benchmarkData?.fileMetrics || []).map((fm: any, idx: number) => (
                 <tr key={idx} className="hover:bg-[#0d1117]/60 transition-colors">
                   <td className="p-2.5 font-bold text-[#e6edf3] flex items-center gap-2">
                     <FileCode className="w-3.5 h-3.5 text-[#58a6ff] shrink-0" />
@@ -191,10 +185,17 @@ export default function TelemetryPage() {
                     </div>
                   </td>
                   <td className="p-2.5 text-[#d2a8ff] font-bold">
-                    +${(fm.savingsUSD || 0.001).toFixed(4)}
+                    +${(fm.savingsUSD || 0).toFixed(4)}
                   </td>
                 </tr>
               ))}
+              {(!benchmarkData?.fileMetrics || benchmarkData.fileMetrics.length === 0) && (
+                <tr>
+                  <td colSpan={6} className="p-3 text-center text-[#8b949e] text-[11px]">
+                    No file metrics yet — run the live benchmark on an ingested repo to see the per-file breakdown.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

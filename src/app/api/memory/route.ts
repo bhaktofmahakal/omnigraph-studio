@@ -29,21 +29,19 @@ export async function GET(req: Request) {
 
   if (redis) {
     try {
-      const start = Date.now();
       await redis.ping();
-      redisPing = `${Date.now() - start}ms (Connected)`;
-    } catch (err: any) {
-      redisPing = `Failed: ${err.message}`;
+      redisPing = 'Connected';
+    } catch {
+      redisPing = 'Error';
     }
   }
 
   if (vector) {
     try {
-      const start = Date.now();
-      const info = await vector.info();
-      vectorPing = `${Date.now() - start}ms (Connected, ${info?.vectorCount || 0} vectors)`;
-    } catch (err: any) {
-      vectorPing = `Failed: ${err.message}`;
+      await vector.info();
+      vectorPing = 'Connected';
+    } catch {
+      vectorPing = 'Error';
     }
   }
 

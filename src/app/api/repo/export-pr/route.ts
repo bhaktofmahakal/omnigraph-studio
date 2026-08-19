@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { DiffHunk } from '@/lib/types';
 
 export const runtime = 'nodejs';
 
@@ -9,6 +10,14 @@ export const runtime = 'nodejs';
  * 1. Opening a real GitHub PR on the target repository using GitHub REST API
  * 2. Generating standard RFC-compliant .patch unified diff strings for `git apply`
  */
+
+interface ExportFile {
+  path?: string;
+  oldCode?: string;
+  originalCode?: string;
+  newCode?: string;
+  currentCode?: string;
+}
 
 export async function POST(req: Request) {
   try {
@@ -21,16 +30,23 @@ export async function POST(req: Request) {
       files = [],
       hunks = [],
       githubToken,
-    } = body;
+    } = body as {
+      repoUrl?: string;
+      branchName?: string;
+      prTitle?: string;
+      prBody?: string;
+      files?: ExportFile[];
+      hunks?: DiffHunk[];
+      githubToken?: string;
+    };
 
     // 1. Generate Unified Patch Bundle (.patch)
     let patchBundle = '';
-    const filesWithHunks = new Set(hunks.map((h: any) => h.file));
 
     if (hunks.length > 0) {
-      hunks.forEach((hunk: any) => {
+      hunks.forEach((hunk) => {
         patchBundle += `diff --git a/${hunk.file} b/${hunk.file}\n--- a/${hunk.file}\n+++ b/${hunk.file}\n${hunk.header || '@@ -1,1 +1,1 @@'}\n`;
-        hunk.lines?.forEach((line: any) => {
+        hunk.lines?.forEach((line) => {
           const prefix = line.type === 'addition' ? '+' : line.type === 'deletion' ? '-' : ' ';
           patchBundle += `${prefix}${line.content}\n`;
         });
@@ -38,7 +54,7 @@ export async function POST(req: Request) {
       });
     } else if (files.length > 0) {
       // Generate diff from modified files vs original
-      files.forEach((f: any) => {
+      files.forEach((f) => {
         const oldLines = (f.oldCode || f.originalCode || '').split('\n');
         const newLines = (f.newCode || f.currentCode || '').split('\n');
         patchBundle += `diff --git a/${f.path} b/${f.path}\n--- a/${f.path}\n+++ b/${f.path}\n@@ -1,${oldLines.length} +1,${newLines.length} @@\n`;
@@ -47,6 +63,8 @@ export async function POST(req: Request) {
         patchBundle += '\n';
       });
     }
+
+    let githubError: string | null = null;
 
     // 2. If GitHub Token is provided, create real GitHub Pull Request
     if (githubToken && repoUrl) {
@@ -100,7 +118,7 @@ export async function POST(req: Request) {
               if (newBranchRes.ok) {
                 // D. Update files in branch
                 for (const file of files) {
-                  const contentBase64 = Buffer.from(file.currentCode || file.content || '').toString('base64');
+                  const contentBase64 = Buffer.from(file.currentCode || file.newCode || '').toString('base64');
                   
                   // Get file SHA if exists
                   let fileSha = undefined;
@@ -142,7 +160,7 @@ export async function POST(req: Request) {
                   },
                   body: JSON.stringify({
                     title: prTitle,
-                    body: `${prBody}\n\n### Modified Files (${files.length}):\n${files.map((f: any) => `- \`${f.path}\``).join('\n')}\n\n---\n*Created by [OmniGraph Studio](https://omnigraph-app-kohl.vercel.app)*`,
+                    body: `${prBody}\n\n### Modified Files (${files.length}):\n${files.map((f) => `- \`${f.path}\``).join('\n')}\n\n---\n*Created with OmniGraph Studio — PSMAS Swarm v2026.2*`,
                     head: branchName,
                     base: defaultBranch,
                   }),
@@ -158,25 +176,44 @@ export async function POST(req: Request) {
                     branch: branchName,
                     patchBundle,
                   });
+                } else {
+                  const prErr = await prRes.json().catch(() => null);
+                  githubError = `GitHub PR creation failed (${prRes.status}): ${prErr?.message || prRes.statusText}`;
                 }
+              } else {
+                const brErr = await newBranchRes.json().catch(() => null);
+                githubError = `GitHub branch creation failed (${newBranchRes.status}): ${brErr?.message || newBranchRes.statusText}`;
               }
+            } else {
+              const refErr = await refRes.json().catch(() => null);
+              githubError = `GitHub ref lookup failed (${refRes.status}): ${refErr?.message || refRes.statusText}`;
             }
+          } else {
+            const repoErr = await repoRes.json().catch(() => null);
+            githubError = `GitHub repo lookup failed (${repoRes.status}): ${repoErr?.message || repoRes.statusText}`;
           }
-        } catch (ghErr: any) {
-          // Fall through to patch download with error note
+        } catch (ghErr) {
+          githubError = ghErr instanceof Error ? ghErr.message : 'Unknown GitHub API error';
         }
+      } else {
+        githubError = 'Invalid repository URL. Expected https://github.com/owner/repo';
       }
     }
 
     // Default response: Ready-to-apply Unified Patch Bundle
-    return NextResponse.json({
-      status: 'success',
-      mode: 'patch_bundle_ready',
+    const base: Record<string, unknown> = {
+      status: githubError ? 'error' : 'success',
+      mode: githubError ? 'github_pr_failed' : 'patch_bundle_ready',
       branch: branchName,
       patchBundle,
       applyCommand: `git apply --whitespace=fix omnigraph-${Date.now()}.patch`,
-    });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message || 'PR Export failed' }, { status: 500 });
+    };
+    if (githubError) {
+      base.error = githubError;
+      return NextResponse.json(base, { status: 502 });
+    }
+    return NextResponse.json(base);
+  } catch (err) {
+    return NextResponse.json({ error: err instanceof Error ? err.message : 'PR Export failed' }, { status: 500 });
   }
 }

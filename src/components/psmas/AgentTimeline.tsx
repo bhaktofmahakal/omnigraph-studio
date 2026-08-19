@@ -47,7 +47,7 @@ export const AgentTimeline: React.FC = () => {
         icon: Lightbulb,
         color: '#58a6ff',
         borderColor: '#58a6ff',
-        tokensUsed: Math.ceil(telemetry.totalInputTokens * 0.25) || 320,
+        tokensUsed: telemetry.totalInputTokens ? Math.ceil(telemetry.totalInputTokens * 0.25) : 0,
         filesInspected: filePaths.slice(0, 3),
         reasoning:
           architectLogs[0]?.message ||
@@ -63,7 +63,7 @@ export const AgentTimeline: React.FC = () => {
         icon: FileText,
         color: '#3fb950',
         borderColor: '#3fb950',
-        tokensUsed: Math.ceil(telemetry.totalInputTokens * 0.35) || 540,
+        tokensUsed: telemetry.totalInputTokens ? Math.ceil(telemetry.totalInputTokens * 0.35) : 0,
         filesInspected: filePaths,
         reasoning:
           architectLogs[1]?.message ||
@@ -79,7 +79,7 @@ export const AgentTimeline: React.FC = () => {
         icon: Edit3,
         color: '#3fb950',
         borderColor: '#3fb950',
-        tokensUsed: Math.ceil(telemetry.totalOutputTokens * 0.4) || 680,
+        tokensUsed: telemetry.totalOutputTokens ? Math.ceil(telemetry.totalOutputTokens * 0.4) : 0,
         filesInspected: filePaths.slice(0, 2),
         reasoning:
           codewriterLogs[0]?.message ||
@@ -95,7 +95,7 @@ export const AgentTimeline: React.FC = () => {
         icon: Search,
         color: '#d29922',
         borderColor: '#d29922',
-        tokensUsed: Math.ceil(telemetry.totalOutputTokens * 0.3) || 420,
+        tokensUsed: telemetry.totalOutputTokens ? Math.ceil(telemetry.totalOutputTokens * 0.3) : 0,
         filesInspected: filePaths.filter((p) => p.includes('test') || p.includes('spec')),
         reasoning:
           testLogs[0]?.message ||
@@ -111,7 +111,7 @@ export const AgentTimeline: React.FC = () => {
         icon: ShieldCheck,
         color: '#f85149',
         borderColor: '#f85149',
-        tokensUsed: Math.ceil(telemetry.totalOutputTokens * 0.3) || 310,
+        tokensUsed: telemetry.totalOutputTokens ? Math.ceil(telemetry.totalOutputTokens * 0.3) : 0,
         filesInspected: filePaths,
         reasoning:
           securityLogs[0]?.message ||

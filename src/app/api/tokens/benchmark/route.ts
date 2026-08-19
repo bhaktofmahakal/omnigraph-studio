@@ -18,7 +18,7 @@ function tokenizeString(content: string): number {
   return Math.max(1, words.length + Math.ceil(punctuation * 0.6));
 }
 
-function extractAstSkeleton(content: string, language: string = 'typescript'): string {
+function extractAstSkeleton(content: string): string {
   const lines = content.split('\n');
   const signatureLines: string[] = [];
 
@@ -68,11 +68,16 @@ export async function POST(req: Request) {
 
     let totalRawTokens = 0;
     let totalCompressedTokens = 0;
+    const skipped: { path: string; reason: string }[] = [];
 
     const fileMetrics = files.map((file) => {
-      const fullCode = file.currentCode || file.originalCode || (file as any).content || '';
+      const fullCode = file.currentCode ?? file.originalCode ?? '';
+      if (!fullCode.trim()) {
+        skipped.push({ path: file.path || 'unknown', reason: 'No source content available' });
+        return null;
+      }
       const rawTokens = tokenizeString(fullCode);
-      const skeleton = extractAstSkeleton(fullCode, file.language);
+      const skeleton = extractAstSkeleton(fullCode);
       const compressedTokens = Math.max(12, tokenizeString(skeleton));
       
       const reductionPct = Number((((rawTokens - compressedTokens) / rawTokens) * 100).toFixed(1));
@@ -96,6 +101,16 @@ export async function POST(req: Request) {
       };
     });
 
+    const validMetrics = fileMetrics.filter((m): m is NonNullable<typeof m> => m !== null);
+
+    if (validMetrics.length === 0) {
+      return NextResponse.json({
+        status: 'error',
+        message: 'None of the provided files contain source content. Ingest a repository first.',
+        skipped,
+      }, { status: 400 });
+    }
+
     const netReductionPct = Number((((totalRawTokens - totalCompressedTokens) / totalRawTokens) * 100).toFixed(1));
     const netRawCost = Number(((totalRawTokens / 1_000_000) * 2.50).toFixed(4));
     const netCompressedCost = Number(((totalCompressedTokens / 1_000_000) * 0.70).toFixed(4));
@@ -105,7 +120,7 @@ export async function POST(req: Request) {
       status: 'success',
       timestamp: new Date().toISOString(),
       aggregate: {
-        fileCount: files.length,
+        fileCount: validMetrics.length,
         totalRawTokens,
         totalCompressedTokens,
         netReductionPct,
@@ -116,10 +131,11 @@ export async function POST(req: Request) {
         monthlyProjectionAt500PRs: Number((netSavingsPerSweep * 500).toFixed(2)),
         annualProjection: Number((netSavingsPerSweep * 500 * 12).toFixed(2)),
       },
-      fileMetrics,
+      fileMetrics: validMetrics,
+      skipped,
     });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message || 'Benchmark calculation failed' }, { status: 500 });
+  } catch (err) {
+    return NextResponse.json({ error: err instanceof Error ? err.message : 'Benchmark calculation failed' }, { status: 500 });
   }
 }
 

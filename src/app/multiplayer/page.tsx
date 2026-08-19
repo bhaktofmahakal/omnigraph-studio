@@ -8,24 +8,12 @@ import {
   Unlock,
   Radio,
   Send,
-  Play,
-  Pause,
-  UserPlus,
-  Trash2,
-  Copy,
-  Check,
   Edit2,
-  X,
-  Share2,
   Database,
   Clock,
   Activity,
-  ShieldCheck,
-  Sparkles,
-  Loader2,
 } from 'lucide-react';
 import { useOmniStore } from '@/lib/store/useOmniStore';
-import { Collaborator } from '@/lib/types';
 
 interface LiveLockData {
   nodeId: string;
@@ -35,34 +23,22 @@ interface LiveLockData {
 
 export default function MultiplayerPage() {
   const collaborators = useOmniStore((state) => state.collaborators);
-  const updateCollaboratorCursor = useOmniStore((state) => state.updateCollaboratorCursor);
-  const addCollaborator = useOmniStore((state) => state.addCollaborator);
-  const removeCollaborator = useOmniStore((state) => state.removeCollaborator);
   const updateUserProfile = useOmniStore((state) => state.updateUserProfile);
   const addLog = useOmniStore((state) => state.addLog);
   const nodes = useOmniStore((state) => state.nodes);
 
-  const [isSimulating, setIsSimulating] = useState(false);
   const [activeLocks, setActiveLocks] = useState<LiveLockData[]>([]);
   const [redisStatus, setRedisStatus] = useState<'online' | 'fallback' | 'checking'>('checking');
   const [teamEvents, setTeamEvents] = useState<any[]>([]);
   const [pingMessage, setPingMessage] = useState('');
   const [pingSent, setPingSent] = useState(false);
-  const [copiedLink, setCopiedLink] = useState(false);
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
 
-  // Form states
-  const [newCollabName, setNewCollabName] = useState('');
-  const [newCollabRole, setNewCollabRole] = useState('Frontend Engineer');
-  const [newCollabColor, setNewCollabColor] = useState('#818CF8');
-
   // User profile state
-  const currentUser = collaborators.find((c) => c.id === 'collab-3') || collaborators[collaborators.length - 1];
+  const currentUser = collaborators.find((c) => c.id === 'you') || collaborators[0];
   const [profileName, setProfileName] = useState(currentUser?.name || 'You (Lead Engineer)');
   const [profileRole, setProfileRole] = useState(currentUser?.role || 'Lead AI Engineer');
 
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const lockPollRef = useRef<NodeJS.Timeout | null>(null);
 
   // Poll Upstash Redis for active distributed locks and team events
@@ -103,34 +79,6 @@ export default function MultiplayerPage() {
       if (lockPollRef.current) clearInterval(lockPollRef.current);
     };
   }, []);
-
-  // Simulated cursor movements
-  useEffect(() => {
-    if (isSimulating) {
-      intervalRef.current = setInterval(() => {
-        collaborators.forEach((c) => {
-          if (c.id !== 'collab-3') {
-            const dx = (Math.random() - 0.5) * 40;
-            const dy = (Math.random() - 0.5) * 40;
-            const randomNode = nodes.length > 0 ? nodes[Math.floor(Math.random() * nodes.length)]?.id : undefined;
-
-            updateCollaboratorCursor(
-              c.id,
-              Math.max(0, Math.min(800, c.cursor.x + dx)),
-              Math.max(0, Math.min(600, c.cursor.y + dy)),
-              randomNode || c.activeNodeId || undefined
-            );
-          }
-        });
-      }, 800);
-    } else if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    }
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    };
-  }, [isSimulating, collaborators, nodes, updateCollaboratorCursor]);
 
   const toggleNodeLock = async (nodeId: string, collaboratorId: string) => {
     const existingLock = activeLocks.find((l) => l.nodeId === nodeId);
@@ -225,37 +173,6 @@ export default function MultiplayerPage() {
     setTimeout(() => setPingSent(false), 2000);
   };
 
-  const handleCopyInviteLink = () => {
-    const inviteUrl = `${window.location.origin}/multiplayer?room=mesh-${Math.floor(1000 + Math.random() * 9000)}`;
-    navigator.clipboard.writeText(inviteUrl);
-    setCopiedLink(true);
-    setTimeout(() => setCopiedLink(false), 2000);
-  };
-
-  const handleCreateCollaborator = () => {
-    if (!newCollabName.trim()) return;
-    const initials = newCollabName
-      .split(' ')
-      .map((p) => p[0])
-      .join('')
-      .slice(0, 2)
-      .toUpperCase();
-
-    const newCollab: Collaborator = {
-      id: `collab-${Date.now()}`,
-      name: newCollabName.trim(),
-      role: newCollabRole.trim(),
-      color: newCollabColor,
-      avatar: initials || 'DEV',
-      status: 'online',
-      cursor: { x: Math.floor(200 + Math.random() * 400), y: Math.floor(150 + Math.random() * 300) },
-    };
-
-    addCollaborator(newCollab);
-    setNewCollabName('');
-    setIsAddModalOpen(false);
-  };
-
   const handleSaveProfile = () => {
     if (!profileName.trim()) return;
     updateUserProfile(profileName.trim(), profileRole.trim());
@@ -269,7 +186,7 @@ export default function MultiplayerPage() {
         <div className="flex items-center gap-2 min-w-0">
           <Users className="w-4 h-4 text-[#58a6ff] shrink-0" />
           <h1 className="font-bold text-[#e6edf3] truncate text-xs sm:text-xs">
-            Live Multiplayer Mesh & Upstash Distributed Node Lock Hub
+            Live Multiplayer Mesh & Distributed Node Lock Hub
           </h1>
           <span className="text-[10px] text-[#8b949e] hidden sm:inline shrink-0">Screen 7</span>
         </div>
@@ -282,16 +199,8 @@ export default function MultiplayerPage() {
               : 'bg-[#388bfd]/20 border-[#388bfd] text-[#58a6ff]'
           }`}>
             <Database className="w-3.5 h-3.5" />
-            <span>{redisStatus === 'online' ? 'Upstash Redis Locked' : 'Local Memory Synced'}</span>
+            <span>{redisStatus === 'online' ? 'Distributed Lock Sync Active' : 'Local Memory Synced'}</span>
           </div>
-
-          <button
-            onClick={handleCopyInviteLink}
-            className="flex items-center gap-1.5 px-3 py-1 bg-[#21262d] hover:bg-[#30363d] text-[#58a6ff] border border-[#30363d] rounded-lg text-xs font-mono font-bold transition-all shadow shrink-0"
-          >
-            {copiedLink ? <Check className="w-3.5 h-3.5 text-[#3fb950]" /> : <Share2 className="w-3.5 h-3.5" />}
-            <span>{copiedLink ? 'Link Copied!' : 'Share Room'}</span>
-          </button>
         </div>
       </div>
 
@@ -305,13 +214,6 @@ export default function MultiplayerPage() {
                 <Wifi className="w-3.5 h-3.5 text-[#3fb950]" />
                 <span>Active Collaborators ({collaborators.length})</span>
               </span>
-              <button
-                onClick={() => setIsAddModalOpen(true)}
-                className="flex items-center gap-1 px-2 py-0.5 bg-[#21262d] hover:bg-[#30363d] text-[#58a6ff] border border-[#30363d] rounded text-[11px] font-mono transition-all"
-              >
-                <UserPlus className="w-3 h-3" />
-                <span>Add Teammate</span>
-              </button>
             </div>
 
             <div className="space-y-2">
@@ -353,7 +255,7 @@ export default function MultiplayerPage() {
                     </div>
 
                     <div className="flex items-center gap-1">
-                      {isYou ? (
+                      {isYou && (
                         <button
                           onClick={() => setIsProfileModalOpen(true)}
                           className="p-1 text-[#8b949e] hover:text-[#e6edf3] rounded hover:bg-[#30363d]"
@@ -361,35 +263,11 @@ export default function MultiplayerPage() {
                         >
                           <Edit2 className="w-3.5 h-3.5" />
                         </button>
-                      ) : (
-                        <button
-                          onClick={() => removeCollaborator(c.id)}
-                          className="p-1 text-[#8b949e] hover:text-[#f85149] rounded hover:bg-[#30363d]"
-                          title="Remove Collaborator"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
                       )}
                     </div>
                   </div>
                 );
               })}
-            </div>
-
-            {/* Simulation Toggle */}
-            <div className="pt-2 border-t border-[#30363d] flex items-center justify-between">
-              <span className="text-[11px] text-[#8b949e] font-mono">Simulate Cursor Activity</span>
-              <button
-                onClick={() => setIsSimulating(!isSimulating)}
-                className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-mono font-bold transition-all ${
-                  isSimulating
-                    ? 'bg-[#238636] text-white'
-                    : 'bg-[#21262d] text-[#8b949e] hover:text-[#e6edf3]'
-                }`}
-              >
-                {isSimulating ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3" />}
-                <span>{isSimulating ? 'Active' : 'Start Simulation'}</span>
-              </button>
             </div>
           </div>
 
@@ -417,7 +295,7 @@ export default function MultiplayerPage() {
               </button>
             </div>
             {pingSent && (
-              <span className="text-[10px] text-[#3fb950] block font-bold">✓ Broadcasted to Upstash Redis Feed!</span>
+              <span className="text-[10px] text-[#3fb950] block font-bold">✓ Broadcasted to Team Feed!</span>
             )}
           </div>
         </div>
@@ -507,7 +385,7 @@ export default function MultiplayerPage() {
               <div className="flex items-center gap-2">
                 <Activity className="w-4 h-4 text-[#3fb950]" />
                 <h2 className="text-xs font-bold text-[#e6edf3]">
-                  Live Upstash Redis Collaborative Event Stream
+                  Live Team Event Stream
                 </h2>
               </div>
               <span className="text-[10px] text-[#3fb950] bg-[#238636]/20 px-2 py-0.5 rounded font-bold">
@@ -541,46 +419,6 @@ export default function MultiplayerPage() {
           </div>
         </div>
       </div>
-
-      {/* Add Teammate Modal */}
-      {isAddModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-black/80 backdrop-blur-sm">
-          <div className="w-full max-w-sm bg-[#161b22] border border-[#30363d] rounded-2xl p-4 space-y-3 font-mono text-xs">
-            <div className="flex items-center justify-between pb-2 border-b border-[#30363d]">
-              <span className="font-bold text-[#e6edf3]">Add New Collaborator</span>
-              <button onClick={() => setIsAddModalOpen(false)} className="text-[#8b949e] hover:text-[#e6edf3]">
-                ✕
-              </button>
-            </div>
-            <div>
-              <label className="text-[11px] text-[#8b949e] block mb-1">Full Name</label>
-              <input
-                type="text"
-                placeholder="e.g. Alex Chen"
-                value={newCollabName}
-                onChange={(e) => setNewCollabName(e.target.value)}
-                className="w-full bg-[#0d1117] border border-[#30363d] rounded p-2 text-[#e6edf3] focus:outline-none"
-              />
-            </div>
-            <div>
-              <label className="text-[11px] text-[#8b949e] block mb-1">Role</label>
-              <input
-                type="text"
-                value={newCollabRole}
-                onChange={(e) => setNewCollabRole(e.target.value)}
-                className="w-full bg-[#0d1117] border border-[#30363d] rounded p-2 text-[#e6edf3] focus:outline-none"
-              />
-            </div>
-            <button
-              onClick={handleCreateCollaborator}
-              disabled={!newCollabName.trim()}
-              className="w-full py-2 bg-[#238636] hover:bg-[#2ea043] text-white font-bold rounded-lg transition-all"
-            >
-              Add Teammate
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* Edit Profile Modal */}
       {isProfileModalOpen && (

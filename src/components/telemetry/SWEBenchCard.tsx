@@ -11,9 +11,11 @@ export const SWEBenchCard: React.FC = () => {
 
   const meta = activeScenario.sweBenchMetadata;
   const assertions = nodes.filter((n) => n.type === 'assertion');
-  const baselineCost = meta.rawClaudeCost || Number(((telemetry.linearBaselineTokens / 1000000) * 0.70).toFixed(3)) || 0.104;
-  const optimizedCost = telemetry.currentCostUSD || meta.superbrainCost || 0.045;
-  const savingsPct = baselineCost > 0 ? (((baselineCost - optimizedCost) / baselineCost) * 100).toFixed(1) : '65.0';
+  const baselineCost = meta.rawClaudeCost || 0;
+  const optimizedCost = meta.superbrainCost || telemetry.currentCostUSD || 0;
+  const savingsPct = baselineCost > 0 && optimizedCost > 0
+    ? (((baselineCost - optimizedCost) / baselineCost) * 100).toFixed(1)
+    : '0.0';
 
   return (
     <div className="flex flex-col h-full w-full bg-[#161b22] text-[#e6edf3] font-sans overflow-y-auto custom-scrollbar select-none p-3 sm:p-4 justify-between space-y-3 min-w-0">
@@ -26,8 +28,8 @@ export const SWEBenchCard: React.FC = () => {
           </h2>
         </div>
 
-        <span className="text-[10px] bg-[#238636]/20 text-[#3fb950] px-2 py-0.5 rounded border border-[#238636]/30 font-mono font-bold shrink-0">
-          {meta.status || 'VERIFIED'}
+        <span className="text-[10px] bg-[#388bfd]/20 text-[#58a6ff] px-2 py-0.5 rounded border border-[#388bfd]/30 font-mono font-bold shrink-0">
+          {meta.status || 'PENDING'}
         </span>
       </div>
 
@@ -71,7 +73,7 @@ export const SWEBenchCard: React.FC = () => {
       {/* ── Test Assertion Checklist ── */}
       <div className="space-y-1 my-1 flex-1 min-h-[90px]">
         <span className="text-[10px] text-[#8b949e] font-medium uppercase tracking-wider block">
-          AST Assertions & Safety Checks ({assertions.length > 0 ? assertions.length : meta.testAssertionsPassed}/{assertions.length > 0 ? assertions.length : meta.testAssertionsTotal} Verified)
+          AST Assertions & Safety Checks ({assertions.length}/{assertions.length} Verified)
         </span>
         <div className="space-y-1 max-h-28 sm:max-h-36 overflow-y-auto pr-1 custom-scrollbar">
           {assertions.length > 0 ? (
@@ -82,17 +84,9 @@ export const SWEBenchCard: React.FC = () => {
               </div>
             ))
           ) : (
-            [
-              { name: 'AST Dependency Graph Cyclic Integrity', pass: true },
-              { name: 'TokenFold Progressive Disclosure Limits', pass: true },
-              { name: 'Human-in-the-Loop Safe Approval Barrier', pass: true },
-              { name: 'RBAC Permission Boundary Assertion', pass: true },
-            ].map((t, i) => (
-              <div key={i} className="flex items-center gap-2 text-[11px] p-1.5 rounded bg-[#0d1117]/60 border border-[#21262d]">
-                <CheckCircle2 className="w-3.5 h-3.5 text-[#3fb950] shrink-0" />
-                <span className="truncate text-[#e6edf3]">{t.name}</span>
-              </div>
-            ))
+            <div className="text-[11px] text-[#8b949e] p-2 rounded bg-[#0d1117]/60 border border-[#21262d]">
+              No real assertions yet. Run a PSMAS sweep over an ingested repo to generate them.
+            </div>
           )}
         </div>
       </div>

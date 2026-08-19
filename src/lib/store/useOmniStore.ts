@@ -13,9 +13,8 @@ import {
   TelemetryMetrics,
   TerminalLogEntry,
 } from '../types';
-import { SCENARIOS } from '../graph/sampleCodebases';
-import { DJANGO_SCENARIO_STEPS, INITIAL_AGENTS } from '../agents/psmasEngine';
-import { createDynamicBeadsForRepo, INITIAL_BEAD_TASKS } from '../agents/beadsEngine';
+import { INITIAL_AGENTS } from '../agents/psmasEngine';
+import { createDynamicBeadsForRepo } from '../agents/beadsEngine';
 import { calculateGraphTokenMetrics, expandNodeProgressive } from '../graph/ogParser';
 import { parseCodeToHunks, reconcileApprovedHunks } from '../diff/patchEngine';
 
@@ -36,6 +35,11 @@ interface OmniStoreState {
   addScenario: (newScenario: Scenario) => void;
   openIngestModal: () => void;
   closeIngestModal: () => void;
+
+  // Self-Ingest (real repository bootstrap)
+  selfIngestStatus: 'idle' | 'loading' | 'ready' | 'error';
+  selfIngestError: string | null;
+  hydrateFromSelf: () => Promise<void>;
 
   // ObjectGraph Canvas
   nodes: OGNodeData[];
@@ -106,73 +110,58 @@ interface OmniStoreState {
   updateUserProfile: (name: string, role: string) => void;
 }
 
-const initialScenario = SCENARIOS[0];
-
-const initialHunks = initialScenario.files.flatMap(f =>
-  parseCodeToHunks(f.name, f.initialCode, f.modifiedCode)
-);
-
-const initialFiles: PatchFile[] = initialScenario.files.map(f => ({
-  path: f.path,
-  language: f.language,
-  originalCode: f.initialCode,
-  currentCode: f.initialCode,
-  modifiedCode: f.modifiedCode,
-  hunks: initialHunks.filter(h => h.file === f.name),
-  isDirty: false,
-}));
-
-const initialTokenMetrics = calculateGraphTokenMetrics(initialScenario.initialNodes);
-
-const initialTelemetry: TelemetryMetrics = {
-  totalInputTokens: 18450,
-  totalOutputTokens: 6240,
-  tokensSaved: 48920,
-  savingsPercentage: 72.4,
-  linearBaselineTokens: 73610,
-  currentCostUSD: 0.065,
-  baselineCostUSD: 0.104,
-  activeGraphNodes: 4,
-  totalGraphNodes: initialScenario.initialNodes.length,
-  traversalHops: 3,
-  compressionRatio: 2.82,
+export const EMPTY_SCENARIO: Scenario = {
+  id: 'empty',
+  title: 'No codebase ingested yet',
+  category: 'Self-Ingest',
+  description: 'Ingest this repository via "Self-Ingest" in the header, or import any codebase / GitHub repo.',
+  taskDirective: 'Analyze the active codebase and generate surgical improvements.',
+  benchmarkTarget: '—',
+  files: [],
+  initialNodes: [],
+  initialEdges: [],
+  sweBenchMetadata: {
+    id: 'empty',
+    taskName: 'No benchmark run yet',
+    module: '—',
+    rawClaudeTokens: 0,
+    superbrainTokens: 0,
+    rawClaudeCost: 0,
+    superbrainCost: 0,
+    reductionPercentage: 0,
+    status: 'PENDING',
+    testAssertionsPassed: 0,
+    testAssertionsTotal: 0,
+  },
 };
 
-const INITIAL_COLLABORATORS: Collaborator[] = [
-  {
-    id: 'collab-1',
-    name: 'Alex (Staff Architect)',
-    role: 'Staff Architect',
-    color: '#818CF8', // Indigo
-    avatar: 'AL',
-    cursor: { x: 380, y: 190, nodeId: 'file-auth-ts' },
-    activeNodeId: 'file-auth-ts',
-    status: 'reviewing'
-  },
-  {
-    id: 'collab-2',
-    name: 'Sarah (Security Lead)',
-    role: 'Security Engineer',
-    color: '#34D399', // Emerald
-    avatar: 'SL',
-    cursor: { x: 580, y: 320, nodeId: 'file-jwt-ts' },
-    activeNodeId: 'file-jwt-ts',
-    status: 'editing'
-  },
-  {
-    id: 'collab-3',
-    name: 'You (Lead Engineer)',
-    role: 'Lead AI Engineer',
-    color: '#38BDF8', // Cyan
-    avatar: 'ME',
-    cursor: { x: 420, y: 280 },
-    status: 'online'
-  }
-];
+const emptyTelemetry: TelemetryMetrics = {
+  totalInputTokens: 0,
+  totalOutputTokens: 0,
+  tokensSaved: 0,
+  savingsPercentage: 0,
+  linearBaselineTokens: 0,
+  currentCostUSD: 0,
+  baselineCostUSD: 0,
+  activeGraphNodes: 0,
+  totalGraphNodes: 0,
+  traversalHops: 0,
+  compressionRatio: 0,
+};
+
+const YOU_COLLABORATOR: Collaborator = {
+  id: 'you',
+  name: 'You (Lead Engineer)',
+  role: 'Lead AI Engineer',
+  color: '#38BDF8', // Cyan
+  avatar: 'ME',
+  cursor: { x: 420, y: 280 },
+  status: 'online',
+};
 
 export const useOmniStore = create<OmniStoreState>((set, get) => ({
   // Beads Task Graph (2026 Operational Architecture)
-  beads: INITIAL_BEAD_TASKS,
+  beads: [],
   selectedBeadId: null,
   addBead: (bead: BeadTask) => set({ beads: [bead, ...get().beads] }),
   updateBeadStatus: (id: string, status: BeadStatus) =>
@@ -190,9 +179,9 @@ export const useOmniStore = create<OmniStoreState>((set, get) => ({
   selectBead: (id: string | null) => set({ selectedBeadId: id }),
 
   // Scenarios & Custom Ingestion
-  scenarios: SCENARIOS,
-  activeScenarioId: initialScenario.id,
-  activeScenario: initialScenario,
+  scenarios: [],
+  activeScenarioId: EMPTY_SCENARIO.id,
+  activeScenario: EMPTY_SCENARIO,
   isIngestModalOpen: false,
   openIngestModal: () => set({ isIngestModalOpen: true }),
   closeIngestModal: () => set({ isIngestModalOpen: false }),
@@ -202,7 +191,7 @@ export const useOmniStore = create<OmniStoreState>((set, get) => ({
     get().setScenario(newScenario.id);
   },
   setScenario: (id: string) => {
-    const scenario = get().scenarios.find(s => s.id === id) || SCENARIOS[0];
+    const scenario = get().scenarios.find(s => s.id === id) || EMPTY_SCENARIO;
     const hunks = scenario.files.flatMap(f =>
       parseCodeToHunks(f.name, f.initialCode, f.modifiedCode)
     );
@@ -216,11 +205,13 @@ export const useOmniStore = create<OmniStoreState>((set, get) => ({
       isDirty: false,
     }));
 
-    const dynamicBeads = createDynamicBeadsForRepo(
-      scenario.title,
-      scenario.files,
-      scenario.taskDirective || scenario.description || 'Perform AST audit and optimization'
-    );
+    const dynamicBeads = scenario.files.length > 0
+      ? createDynamicBeadsForRepo(
+          scenario.title,
+          scenario.files,
+          scenario.taskDirective || scenario.description || 'Perform AST audit and optimization'
+        )
+      : [];
 
     set({
       activeScenarioId: id,
@@ -230,7 +221,7 @@ export const useOmniStore = create<OmniStoreState>((set, get) => ({
       files,
       diffHunks: hunks,
       beads: dynamicBeads,
-      activeFileTab: scenario.files[0]?.name || 'core.ts',
+      activeFileTab: scenario.files[0]?.name || '',
       logs: [],
       currentPhaseAngle: 0,
       currentPhaseAngleDeg: 0,
@@ -238,12 +229,44 @@ export const useOmniStore = create<OmniStoreState>((set, get) => ({
       isAgentRunning: false,
       currentStepIndex: 0,
       activePathEdgeIds: [],
+      telemetry: {
+        ...emptyTelemetry,
+        totalGraphNodes: scenario.initialNodes.length,
+        activeGraphNodes: scenario.initialNodes.filter(n => n.isLoaded).length,
+      },
     });
   },
 
+  // Self-Ingest (real repository bootstrap)
+  selfIngestStatus: 'idle',
+  selfIngestError: null,
+  hydrateFromSelf: async () => {
+    if (get().selfIngestStatus === 'loading') return;
+    set({ selfIngestStatus: 'loading', selfIngestError: null });
+    try {
+      const res = await fetch('/api/repo/self', { method: 'POST' });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.message || `Self-ingest failed (${res.status})`);
+      }
+      const data = await res.json();
+      if (data.status !== 'success' || !data.scenario) {
+        throw new Error('Self-ingest returned no scenario.');
+      }
+      const scenario = data.scenario as Scenario;
+      if (!get().scenarios.some(s => s.id === scenario.id)) {
+        set({ scenarios: [scenario, ...get().scenarios] });
+      }
+      get().setScenario(scenario.id);
+      set({ selfIngestStatus: 'ready' });
+    } catch (err: any) {
+      set({ selfIngestStatus: 'error', selfIngestError: err.message || 'Self-ingest failed' });
+    }
+  },
+
   // ObjectGraph Canvas
-  nodes: initialScenario.initialNodes,
-  edges: initialScenario.initialEdges,
+  nodes: [],
+  edges: [],
   selectedNodeId: null,
   searchQuery: '',
   activePathEdgeIds: [],
@@ -251,7 +274,7 @@ export const useOmniStore = create<OmniStoreState>((set, get) => ({
   addNode: (newNode: OGNodeData) => set((state) => ({ nodes: [...state.nodes, newNode] })),
   toggleNodeExpansion: async (nodeId: string) => {
     // 1. Optimistic local expansion
-    const { nodes, edges, activeScenarioId } = get();
+    const { nodes, edges } = get();
     const { updatedNodes, updatedEdges } = expandNodeProgressive(nodeId, nodes, edges);
     set({
       nodes: updatedNodes,
@@ -263,12 +286,12 @@ export const useOmniStore = create<OmniStoreState>((set, get) => ({
       }
     });
 
-    // 2. Real Backend API Call to Next.js API Route
+    // 2. Stateless backend expansion over the client's real graph state
     try {
       const res = await fetch('/api/graph/traverse', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ scenarioId: activeScenarioId, targetNodeId: nodeId }),
+        body: JSON.stringify({ nodes: updatedNodes, edges: updatedEdges, targetNodeId: nodeId }),
       });
       if (res.ok) {
         const data = await res.json();
@@ -287,7 +310,7 @@ export const useOmniStore = create<OmniStoreState>((set, get) => ({
         }
       }
     } catch {
-      // Local optimistic fallback remains intact
+      // Local optimistic expansion remains intact
     }
   },
   setSearchQuery: (searchQuery: string) => set({ searchQuery }),
@@ -311,6 +334,21 @@ export const useOmniStore = create<OmniStoreState>((set, get) => ({
   playbackSpeed: 1,
   startPSMASSweep: async (promptOverride?: string) => {
     if (get().isAgentRunning) return;
+
+    // Guard: a sweep needs a real ingested codebase
+    if (get().files.length === 0 || get().nodes.length === 0) {
+      get().addLog({
+        id: `log-${Date.now()}-noguard`,
+        timestamp: new Date().toLocaleTimeString(),
+        agentId: 'architect',
+        agentName: 'System Kernel',
+        phaseAngle: 0,
+        level: 'error',
+        message: 'No codebase ingested. Use "Self-Ingest" or "Import Repo" before running a sweep.',
+      });
+      return;
+    }
+
     set({ isAgentRunning: true });
 
     // Retrieve client BYOK keys & per-agent heterogeneous models from OrcaRouter & Groq
@@ -341,7 +379,7 @@ export const useOmniStore = create<OmniStoreState>((set, get) => ({
       : get().nodes[0];
 
     // Get user's active file code for context
-    const activeFile = get().files.find(f => f.path.endsWith(get().activeFileTab));
+    const activeFile = get().files.find(f => f.path.endsWith(get().activeFileTab)) || get().files[0];
     const codeContext = activeFile?.currentCode?.slice(0, 3000) || '';
 
     let totalInputTokens = get().telemetry.totalInputTokens;
@@ -373,7 +411,7 @@ export const useOmniStore = create<OmniStoreState>((set, get) => ({
           agentName: 'Mayor Agent',
           phaseAngle: 0,
           level: 'traversal',
-          message: `[Upstash Vector] Searched 1536-dim Hybrid Index → Discovered ${vData.nodeIds?.length || 0} relevant AST symbols: [${topNodeNames.join(', ')}]`,
+          message: `[Upstash Vector] Searched index → ${vData.nodeIds?.length || 0} relevant AST symbols: [${topNodeNames.join(', ')}]`,
           tokenDelta: 24,
         });
       }
@@ -440,8 +478,8 @@ export const useOmniStore = create<OmniStoreState>((set, get) => ({
       });
 
       // Build prompt with real code context
-      const targetGoal = promptOverride || get().activeScenario.description;
-      const prompt = `You are the ${agent.name} (${agent.role}). User Request: "${targetGoal}"\n\nFile: ${activeFile?.path || 'unknown'}\nNode: ${selectedNode?.label || 'root'}\n\nCode:\n\`\`\`\n${codeContext}\n\`\`\`\n\n${phase.id === 'codewriter' ? 'Generate a minimal, surgical unified diff (with @@ hunk headers) for any fixes you recommend.' : phase.id === 'testrunner' ? 'List specific unit test assertions that should pass.' : phase.id === 'security' ? 'List any security vulnerabilities or boundary checks found.' : 'Analyze the architecture and identify key dependencies and potential issues.'}`;
+      const phaseGoal = promptOverride || get().activeScenario.description;
+      const prompt = `You are the ${agent.name} (${agent.role}). User Request: "${phaseGoal}"\n\nFile: ${activeFile?.path || 'unknown'}\nNode: ${selectedNode?.label || 'root'}\n\nCode:\n\`\`\`\n${codeContext}\n\`\`\`\n\n${phase.id === 'codewriter' ? 'Generate a minimal, surgical unified diff (with @@ hunk headers) for any fixes you recommend.' : phase.id === 'testrunner' ? 'List specific unit test assertions that should pass.' : phase.id === 'security' ? 'List any security vulnerabilities or boundary checks found.' : 'Analyze the architecture and identify key dependencies and potential issues.'}`;
 
       // Estimate input tokens
       const inputTokenEstimate = Math.ceil(prompt.length / 4);
@@ -565,27 +603,19 @@ export const useOmniStore = create<OmniStoreState>((set, get) => ({
                 }
               }
             } else {
-              // Fallback: emit structured operational tool calls
-              const fallbackStep = DJANGO_SCENARIO_STEPS.find(s => s.agentId === phase.id);
-              if (fallbackStep) {
-                for (const logItem of fallbackStep.logs) {
-                  get().addLog({
-                    id: `log-${Date.now()}-fb-${Math.random().toString(36).substr(2, 4)}`,
-                    timestamp: new Date().toLocaleTimeString(),
-                    agentId: phase.id,
-                    agentName: agent.name,
-                    phaseAngle: phase.angleDeg,
-                    level: logItem.level,
-                    message: logItem.message,
-                    tokenDelta: logItem.tokenDelta,
-                  });
-                  await new Promise(r => setTimeout(r, 120 / get().playbackSpeed));
-                }
-              }
+              get().addLog({
+                id: `log-${Date.now()}-empty`,
+                timestamp: new Date().toLocaleTimeString(),
+                agentId: phase.id,
+                agentName: agent.name,
+                phaseAngle: phase.angleDeg,
+                level: 'warn',
+                message: 'AI provider returned an empty stream for this phase.',
+              });
             }
           } else {
             // ============================================================
-            // JSON RESPONSE (fallback when no streaming / no API key)
+            // JSON RESPONSE (non-streaming provider)
             // ============================================================
             const json = await res.json();
             const responseText = json.response?.thought || json.response?.action || JSON.stringify(json.response || json);
@@ -611,7 +641,7 @@ export const useOmniStore = create<OmniStoreState>((set, get) => ({
             agentName: agent.name,
             phaseAngle: phase.angleDeg,
             level: 'error',
-            message: `API Error (${res.status}): ${errText.slice(0, 150)}`,
+            message: `API Error (${res.status}): ${errText.slice(0, 200)}`,
           });
         }
       } catch (err: any) {
@@ -622,28 +652,8 @@ export const useOmniStore = create<OmniStoreState>((set, get) => ({
           agentName: agent.name,
           phaseAngle: phase.angleDeg,
           level: 'error',
-          message: `Network error: ${err.message || 'Connection failed'}. Using server-managed AI gateway.`,
+          message: `Network error: ${err.message || 'Connection failed'}.`,
         });
-
-        // ============================================================
-        // FALLBACK: Use hardcoded steps when API is unavailable
-        // ============================================================
-        const fallbackStep = DJANGO_SCENARIO_STEPS.find(s => s.agentId === phase.id);
-        if (fallbackStep) {
-          for (const logItem of fallbackStep.logs) {
-            get().addLog({
-              id: `log-${Date.now()}-fb-${Math.random().toString(36).substr(2, 4)}`,
-              timestamp: new Date().toLocaleTimeString(),
-              agentId: phase.id,
-              agentName: agent.name,
-              phaseAngle: phase.angleDeg,
-              level: logItem.level,
-              message: `[Offline Fallback] ${logItem.message}`,
-              tokenDelta: logItem.tokenDelta,
-            });
-            await new Promise(r => setTimeout(r, 200 / get().playbackSpeed));
-          }
-        }
       }
 
       // Update real telemetry
@@ -656,7 +666,7 @@ export const useOmniStore = create<OmniStoreState>((set, get) => ({
           totalOutputTokens: totalOutputTokens,
           linearBaselineTokens: rawTokens,
           tokensSaved: Math.max(0, rawTokens - compressedTokens),
-          savingsPercentage: rawTokens > 0 ? Number((((rawTokens - compressedTokens) / rawTokens) * 100).toFixed(1)) : 65,
+          savingsPercentage: rawTokens > 0 ? Number((((rawTokens - compressedTokens) / rawTokens) * 100).toFixed(1)) : 0,
           currentCostUSD: Number(((totalInputTokens + totalOutputTokens) / 1000000 * 0.70).toFixed(4)),
           activeGraphNodes: get().nodes.filter(n => n.isLoaded).length,
           totalGraphNodes: get().nodes.length,
@@ -716,8 +726,8 @@ export const useOmniStore = create<OmniStoreState>((set, get) => ({
   setLogFilter: (filter: string) => set({ logFilter: filter }),
 
   // Monaco Editor & Files
-  activeFileTab: 'auth.ts',
-  files: initialFiles,
+  activeFileTab: '',
+  files: [],
   activeViewMode: 'split',
   setActiveFileTab: (filename: string) => set({ activeFileTab: filename }),
   setActiveViewMode: (mode: 'editor' | 'diff' | 'split') => set({ activeViewMode: mode }),
@@ -729,7 +739,7 @@ export const useOmniStore = create<OmniStoreState>((set, get) => ({
     })),
 
   // Surgical Diffs
-  diffHunks: initialHunks,
+  diffHunks: [],
   isApprovalModalOpen: false,
   acceptHunk: (hunkId: string) =>
     set(state => ({
@@ -785,14 +795,14 @@ export const useOmniStore = create<OmniStoreState>((set, get) => ({
   openMobileSidebar: () => set({ isMobileSidebarOpen: true }),
 
   // Telemetry
-  telemetry: initialTelemetry,
+  telemetry: emptyTelemetry,
   addTokenUsage: (inputTokens: number, outputTokens: number) => {
     const current = get().telemetry;
     const totalInput = current.totalInputTokens + inputTokens;
     const totalOutput = current.totalOutputTokens + outputTokens;
     const baseline = current.linearBaselineTokens;
     const saved = Math.max(0, baseline - (totalInput + totalOutput));
-    const savingsPct = baseline > 0 ? Number(((saved / baseline) * 100).toFixed(1)) : 65;
+    const savingsPct = baseline > 0 ? Number(((saved / baseline) * 100).toFixed(1)) : 0;
     const cost = Number(((totalInput + totalOutput) / 1000000 * 0.70).toFixed(4));
 
     set({
@@ -808,7 +818,7 @@ export const useOmniStore = create<OmniStoreState>((set, get) => ({
   },
 
   // Collaborators
-  collaborators: INITIAL_COLLABORATORS,
+  collaborators: [YOU_COLLABORATOR],
   updateCollaboratorCursor: (id: string, x: number, y: number, nodeId?: string) =>
     set(state => ({
       collaborators: state.collaborators.map(c =>
@@ -822,7 +832,7 @@ export const useOmniStore = create<OmniStoreState>((set, get) => ({
   updateUserProfile: (name: string, role: string) =>
     set(state => ({
       collaborators: state.collaborators.map(c =>
-        c.id === 'collab-3' ? { ...c, name, role } : c
+        c.id === 'you' ? { ...c, name, role } : c
       )
     })),
 }));

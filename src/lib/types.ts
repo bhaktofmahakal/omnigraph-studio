@@ -150,7 +150,7 @@ export interface SWEBenchItem {
   rawClaudeCost: number;
   superbrainCost: number;
   reductionPercentage: number;
-  status: 'RESOLVED' | 'VERIFIED' | 'PASSING';
+  status: 'RESOLVED' | 'VERIFIED' | 'PASSING' | 'PENDING';
   testAssertionsPassed: number;
   testAssertionsTotal: number;
 }
