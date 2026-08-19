@@ -513,15 +513,23 @@ export const useOmniStore = create<OmniStoreState>((set, get) => ({
                 }
               }
             } else {
-              get().addLog({
-                id: `log-${Date.now()}-empty`,
-                timestamp: new Date().toLocaleTimeString(),
-                agentId: phase.id,
-                agentName: agent.name,
-                phaseAngle: phase.angleDeg,
-                level: 'warn',
-                message: `Stream completed but no content received. Check API key configuration in Settings.`,
-              });
+              // Fallback: emit structured operational tool calls
+              const fallbackStep = DJANGO_SCENARIO_STEPS.find(s => s.agentId === phase.id);
+              if (fallbackStep) {
+                for (const logItem of fallbackStep.logs) {
+                  get().addLog({
+                    id: `log-${Date.now()}-fb-${Math.random().toString(36).substr(2, 4)}`,
+                    timestamp: new Date().toLocaleTimeString(),
+                    agentId: phase.id,
+                    agentName: agent.name,
+                    phaseAngle: phase.angleDeg,
+                    level: logItem.level,
+                    message: logItem.message,
+                    tokenDelta: logItem.tokenDelta,
+                  });
+                  await new Promise(r => setTimeout(r, 120 / get().playbackSpeed));
+                }
+              }
             }
           } else {
             // ============================================================

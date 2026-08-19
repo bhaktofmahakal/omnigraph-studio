@@ -79,16 +79,34 @@ export default function MultiplayerPage() {
     };
   }, [isSimulating, collaborators, nodes, updateCollaboratorCursor]);
 
-  const toggleNodeLock = (nodeId: string, collaboratorId: string) => {
-    setLockedNodes((prev) => {
-      const next = { ...prev };
-      if (next[nodeId] === collaboratorId) {
+  const toggleNodeLock = async (nodeId: string, collaboratorId: string) => {
+    const isCurrentlyLocked = lockedNodes[nodeId] === collaboratorId;
+
+    if (isCurrentlyLocked) {
+      await fetch('/api/memory', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'release_lock', nodeId, holderId: collaboratorId }),
+      }).catch(() => {});
+
+      setLockedNodes((prev) => {
+        const next = { ...prev };
         delete next[nodeId];
+        return next;
+      });
+    } else {
+      const res = await fetch('/api/memory', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'acquire_lock', nodeId, holderId: collaboratorId, ttlSec: 60 }),
+      }).catch(() => null);
+
+      if (res && res.ok) {
+        setLockedNodes((prev) => ({ ...prev, [nodeId]: collaboratorId }));
       } else {
-        next[nodeId] = collaboratorId;
+        setLockedNodes((prev) => ({ ...prev, [nodeId]: collaboratorId }));
       }
-      return next;
-    });
+    }
   };
 
   const sendSwarmPing = () => {

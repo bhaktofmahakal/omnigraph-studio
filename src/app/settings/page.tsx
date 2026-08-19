@@ -14,6 +14,9 @@ import {
   Globe,
   Zap,
   Server,
+  Database,
+  Layers,
+  Network,
 } from 'lucide-react';
 
 type ConnectionStatus = 'idle' | 'testing' | 'connected' | 'failed';
@@ -24,6 +27,15 @@ export default function SettingsPage() {
   const [orcaBaseUrl, setOrcaBaseUrl] = useState('https://api.orcarouter.ai/v1');
   const [orcaModel, setOrcaModel] = useState('groq/llama-3.3-70b-versatile');
   const [groqKey, setGroqKey] = useState('');
+
+  // Upstash Memory Layer States
+  const [upstashRedisUrl, setUpstashRedisUrl] = useState('');
+  const [upstashRedisToken, setUpstashRedisToken] = useState('');
+  const [upstashVectorUrl, setUpstashVectorUrl] = useState('');
+  const [upstashVectorToken, setUpstashVectorToken] = useState('');
+  const [memoryPingStatus, setMemoryPingStatus] = useState<string | null>(null);
+  const [isTestingMemory, setIsTestingMemory] = useState(false);
+
   const [saved, setSaved] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('idle');
   const [connectionLatency, setConnectionLatency] = useState<number | null>(null);
@@ -37,11 +49,21 @@ export default function SettingsPage() {
     const storedOrcaModel = localStorage.getItem('omnigraph_orca_model');
     const storedGroq = localStorage.getItem('omnigraph_groq_key');
 
+    const storedRedisUrl = localStorage.getItem('omnigraph_upstash_redis_url');
+    const storedRedisToken = localStorage.getItem('omnigraph_upstash_redis_token');
+    const storedVectorUrl = localStorage.getItem('omnigraph_upstash_vector_url');
+    const storedVectorToken = localStorage.getItem('omnigraph_upstash_vector_token');
+
     if (storedMode === 'byok' || storedMode === 'platform') setProviderMode(storedMode);
     if (storedOrca) setOrcaKey(storedOrca);
     if (storedOrcaUrl) setOrcaBaseUrl(storedOrcaUrl);
     if (storedOrcaModel) setOrcaModel(storedOrcaModel);
     if (storedGroq) setGroqKey(storedGroq);
+
+    if (storedRedisUrl) setUpstashRedisUrl(storedRedisUrl);
+    if (storedRedisToken) setUpstashRedisToken(storedRedisToken);
+    if (storedVectorUrl) setUpstashVectorUrl(storedVectorUrl);
+    if (storedVectorToken) setUpstashVectorToken(storedVectorToken);
   }, []);
 
   const handleSave = () => {
@@ -50,6 +72,12 @@ export default function SettingsPage() {
     localStorage.setItem('omnigraph_orca_url', orcaBaseUrl);
     localStorage.setItem('omnigraph_orca_model', orcaModel);
     localStorage.setItem('omnigraph_groq_key', groqKey);
+
+    localStorage.setItem('omnigraph_upstash_redis_url', upstashRedisUrl);
+    localStorage.setItem('omnigraph_upstash_redis_token', upstashRedisToken);
+    localStorage.setItem('omnigraph_upstash_vector_url', upstashVectorUrl);
+    localStorage.setItem('omnigraph_upstash_vector_token', upstashVectorToken);
+
     setSaved(true);
     setTimeout(() => setSaved(false), 2500);
   };
@@ -60,13 +88,24 @@ export default function SettingsPage() {
     localStorage.removeItem('omnigraph_orca_url');
     localStorage.removeItem('omnigraph_orca_model');
     localStorage.removeItem('omnigraph_groq_key');
+
+    localStorage.removeItem('omnigraph_upstash_redis_url');
+    localStorage.removeItem('omnigraph_upstash_redis_token');
+    localStorage.removeItem('omnigraph_upstash_vector_url');
+    localStorage.removeItem('omnigraph_upstash_vector_token');
+
     setProviderMode('platform');
     setOrcaKey('');
     setOrcaBaseUrl('https://api.orcarouter.ai/v1');
     setOrcaModel('groq/llama-3.3-70b-versatile');
     setGroqKey('');
+    setUpstashRedisUrl('');
+    setUpstashRedisToken('');
+    setUpstashVectorUrl('');
+    setUpstashVectorToken('');
     setConnectionStatus('idle');
     setConnectionLatency(null);
+    setMemoryPingStatus(null);
   };
 
   const handleTestConnection = async () => {
@@ -83,7 +122,6 @@ export default function SettingsPage() {
           prompt: 'Respond with exactly: "connection_ok"',
           apiKey: providerMode === 'byok' ? (orcaKey || groqKey) : undefined,
           model: orcaModel,
-          test: true,
         }),
       });
 
@@ -104,6 +142,34 @@ export default function SettingsPage() {
     }
   };
 
+  const handleTestUpstashMemory = async () => {
+    setIsTestingMemory(true);
+    setMemoryPingStatus('Pinging Upstash endpoints...');
+
+    try {
+      const queryParams = new URLSearchParams();
+      if (upstashRedisUrl) queryParams.set('redisUrl', upstashRedisUrl);
+      if (upstashRedisToken) queryParams.set('redisToken', upstashRedisToken);
+      if (upstashVectorUrl) queryParams.set('vectorUrl', upstashVectorUrl);
+      if (upstashVectorToken) queryParams.set('vectorToken', upstashVectorToken);
+
+      const res = await fetch(`/api/memory?${queryParams.toString()}`);
+      const data = await res.json();
+
+      if (res.ok) {
+        setMemoryPingStatus(
+          `Redis: ${data.redis?.ping} | Vector: ${data.vector?.ping}`
+        );
+      } else {
+        setMemoryPingStatus(`Memory check failed: ${data.error}`);
+      }
+    } catch (err: any) {
+      setMemoryPingStatus(`Network error: ${err.message}`);
+    } finally {
+      setIsTestingMemory(false);
+    }
+  };
+
   return (
     <div className="flex flex-col h-full w-full bg-[#0d1117] text-[#e6edf3] p-2.5 sm:p-4 font-sans select-none space-y-3 sm:space-y-4 overflow-y-auto custom-scrollbar min-w-0">
       {/* Subheader */}
@@ -111,14 +177,14 @@ export default function SettingsPage() {
         <div className="flex items-center gap-2 min-w-0">
           <Settings className="w-4 h-4 text-[#8b949e] shrink-0" />
           <h1 className="font-bold text-[#e6edf3] truncate text-xs sm:text-xs">
-            AI Engine Configuration: In-Built Server Gateway + BYOK Override
+            System & Memory Architecture Configuration: LLM Gateway + Upstash Layer
           </h1>
           <span className="text-[10px] text-[#8b949e] hidden sm:inline shrink-0">Screen 13</span>
         </div>
       </div>
 
       {/* Dual Mode Switcher Banner */}
-      <div className="max-w-2xl w-full grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+      <div className="max-w-3xl w-full grid grid-cols-1 sm:grid-cols-2 gap-2.5">
         <div
           onClick={() => setProviderMode('platform')}
           className={`p-3.5 rounded-xl border cursor-pointer transition-all ${
@@ -140,8 +206,8 @@ export default function SettingsPage() {
               </span>
             )}
           </div>
-          <p className="text-[11px] text-[#8b949e] mt-1.5">
-            Zero configuration needed. Runs directly via server credentials (OrcaRouter + Groq).
+          <p className="mt-1.5 text-[11px] text-[#8b949e] leading-relaxed">
+            Uses server-configured Groq LPU Ultra-Low Latency & OrcaRouter Gateway keys with automatic fallback.
           </p>
         </div>
 
@@ -149,7 +215,7 @@ export default function SettingsPage() {
           onClick={() => setProviderMode('byok')}
           className={`p-3.5 rounded-xl border cursor-pointer transition-all ${
             providerMode === 'byok'
-              ? 'bg-[#1c2d42] border-[#388bfd] ring-1 ring-[#388bfd]'
+              ? 'bg-[#1c2438] border-[#58a6ff] ring-1 ring-[#58a6ff]'
               : 'bg-[#161b22] border-[#30363d] hover:border-[#484f58]'
           }`}
         >
@@ -157,116 +223,84 @@ export default function SettingsPage() {
             <div className="flex items-center gap-2">
               <Key className="w-4 h-4 text-[#58a6ff]" />
               <span className="font-bold font-mono text-xs text-[#e6edf3]">
-                Custom BYOK Override (Optional)
+                Bring Your Own Key (BYOK)
               </span>
             </div>
             {providerMode === 'byok' && (
-              <span className="text-[10px] font-mono font-bold text-[#58a6ff] bg-[#388bfd]/20 px-1.5 py-0.5 rounded">
-                CUSTOM KEY ACTIVE
+              <span className="text-[10px] font-mono font-bold text-[#58a6ff] bg-[#58a6ff]/20 px-1.5 py-0.5 rounded">
+                BYOK ACTIVE
               </span>
             )}
           </div>
-          <p className="text-[11px] text-[#8b949e] mt-1.5">
-            Use your personal OrcaRouter / Groq / OpenAI API keys to bill directly to your own account.
+          <p className="mt-1.5 text-[11px] text-[#8b949e] leading-relaxed">
+            Override with your personal Groq, OrcaRouter, OpenAI, Anthropic, or DeepSeek API keys stored in local storage.
           </p>
         </div>
       </div>
 
-      {/* Settings Form Card */}
-      <div className="p-4 sm:p-6 rounded-xl bg-[#161b22] border border-[#30363d] shadow-2xl max-w-2xl w-full space-y-4 sm:space-y-5 font-mono text-xs">
-        {/* Managed Platform Mode Explanation */}
-        {providerMode === 'platform' ? (
-          <div className="p-3.5 bg-[#0d1117] border border-[#30363d] rounded-xl space-y-2.5">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-[#3fb950] font-bold">
-                <Check className="w-4 h-4" />
-                <span>In-Built Server AI Gateways Live & Active</span>
-              </div>
-              <span className="text-[10px] text-[#8b949e] bg-[#161b22] px-2 py-0.5 rounded border border-[#30363d]">
-                .env.local / Vercel Edge
-              </span>
-            </div>
-            <p className="text-[11px] text-[#8b949e] leading-relaxed">
-              Both <span className="text-[#d29922] font-semibold">Groq Cloud</span> (Ultra-Fast Inference) and <span className="text-[#58a6ff] font-semibold">OrcaRouter</span> (200+ Models) are fully configured server-side.
-              Select any target model below and click <strong>Test Connection</strong>.
-            </p>
-            <div className="flex flex-wrap gap-1.5 pt-1">
-              {[
-                { name: 'Groq Llama 3.3 70B', color: 'text-[#d29922]' },
-                { name: 'Groq Llama 3.1 8B', color: 'text-[#d29922]' },
-                { name: 'GPT-4o Mini', color: 'text-[#3fb950]' },
-                { name: 'GPT-4o', color: 'text-[#3fb950]' },
-                { name: 'Claude 3.5 Sonnet', color: 'text-[#58a6ff]' },
-                { name: 'Gemini 2.5 Flash', color: 'text-[#bc8cff]' },
-                { name: 'DeepSeek-V3', color: 'text-[#58a6ff]' },
-              ].map((m, i) => (
-                <span key={i} className={`text-[10px] px-2 py-0.5 rounded-full bg-[#161b22] border border-[#30363d] ${m.color} font-medium`}>
-                  {m.name}
-                </span>
-              ))}
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-1">
-            <h2 className="text-xs sm:text-sm font-bold text-[#e6edf3]">Custom BYOK Integration</h2>
-            <p className="text-[11px] sm:text-xs text-[#8b949e] leading-relaxed">
-              Your custom keys are stored in your browser&apos;s localStorage and passed securely to <code className="bg-[#0d1117] px-1 rounded">/api/agents/psmas-run/</code>.
-            </p>
-          </div>
-        )}
+      {/* Main Settings Card */}
+      <div className="max-w-3xl w-full p-3 sm:p-5 rounded-xl bg-[#161b22] border border-[#30363d] space-y-4 shadow-xl">
+        <h2 className="text-xs font-bold uppercase text-[#8b949e] tracking-wider flex items-center gap-2 font-mono">
+          <Zap className="w-4 h-4 text-[#d29922]" />
+          <span>1. AI Model & Inference Gateway</span>
+        </h2>
 
-        {/* Form Inputs (Custom Keys or Model Selector) */}
-        <div className="space-y-3.5 pt-2">
+        <div className="space-y-3.5 font-mono">
           {providerMode === 'byok' && (
             <>
-              {/* Groq API Key */}
+              {/* Groq Direct API Key */}
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-[#8b949e] flex items-center gap-2">
-                  <Zap className="w-3.5 h-3.5 text-[#d29922] shrink-0" />
-                  <span>Groq API Key (Ultra-Fast Llama 3.3 / Mixtral Inference)</span>
+                <label className="text-xs font-semibold text-[#8b949e] flex items-center justify-between">
+                  <span className="flex items-center gap-2">
+                    <Zap className="w-3.5 h-3.5 text-[#d29922] shrink-0" />
+                    <span>Groq Cloud API Key (gsk_...)</span>
+                  </span>
+                  <a
+                    href="https://console.groq.com/keys"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-[10px] text-[#58a6ff] hover:underline"
+                  >
+                    Get Groq Key &rarr;
+                  </a>
                 </label>
                 <input
                   type="password"
                   placeholder="gsk_..."
                   value={groqKey}
                   onChange={(e) => setGroqKey(e.target.value)}
-                  className="w-full bg-[#0d1117] border border-[#30363d] focus:border-[#d29922] rounded-lg p-2.5 text-xs text-[#e6edf3] focus:outline-none transition-colors"
+                  className="w-full bg-[#0d1117] border border-[#30363d] focus:border-[#58a6ff] rounded-lg p-2.5 text-xs text-[#e6edf3] placeholder-[#484f58] focus:outline-none transition-colors"
                 />
               </div>
 
               {/* OrcaRouter API Key */}
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-[#8b949e] flex items-center gap-2">
-                  <Key className="w-3.5 h-3.5 text-[#58a6ff] shrink-0" />
-                  <span>OrcaRouter API Key (Unified 200+ LLMs Behind 1 Key)</span>
+                <label className="text-xs font-semibold text-[#8b949e] flex items-center justify-between">
+                  <span className="flex items-center gap-2">
+                    <Key className="w-3.5 h-3.5 text-[#58a6ff] shrink-0" />
+                    <span>OrcaRouter API Key</span>
+                  </span>
+                  <a
+                    href="https://orcarouter.ai"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-[10px] text-[#58a6ff] hover:underline"
+                  >
+                    Get OrcaRouter Key &rarr;
+                  </a>
                 </label>
                 <input
                   type="password"
-                  placeholder="sk-orca-..."
+                  placeholder="sk-or-v1-..."
                   value={orcaKey}
                   onChange={(e) => setOrcaKey(e.target.value)}
-                  className="w-full bg-[#0d1117] border border-[#30363d] focus:border-[#58a6ff] rounded-lg p-2.5 text-xs text-[#e6edf3] focus:outline-none transition-colors"
-                />
-              </div>
-
-              {/* OrcaRouter Base URL */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-[#8b949e] flex items-center gap-2">
-                  <Globe className="w-3.5 h-3.5 text-[#58a6ff] shrink-0" />
-                  <span>OrcaRouter Base URL</span>
-                </label>
-                <input
-                  type="text"
-                  placeholder="https://api.orcarouter.ai/v1"
-                  value={orcaBaseUrl}
-                  onChange={(e) => setOrcaBaseUrl(e.target.value)}
-                  className="w-full bg-[#0d1117] border border-[#30363d] focus:border-[#58a6ff] rounded-lg p-2.5 text-xs text-[#e6edf3] focus:outline-none transition-colors"
+                  className="w-full bg-[#0d1117] border border-[#30363d] focus:border-[#58a6ff] rounded-lg p-2.5 text-xs text-[#e6edf3] placeholder-[#484f58] focus:outline-none transition-colors"
                 />
               </div>
             </>
           )}
 
-          {/* Model Selector with Optgroups */}
+          {/* Model Selector */}
           <div className="space-y-1.5">
             <label className="text-xs font-semibold text-[#8b949e] flex items-center gap-2">
               <Cpu className="w-3.5 h-3.5 text-[#bc8cff] shrink-0" />
@@ -291,8 +325,7 @@ export default function SettingsPage() {
                   ⚡ groq/mixtral-8x7b-32768 (32k Context)
                 </option>
               </optgroup>
-
-              <optgroup label="🌐 OrcaRouter Universal Gateway (200+ Models)" className="bg-[#161b22] text-[#58a6ff] font-bold">
+              <optgroup label="🌐 Universal Gateway" className="bg-[#161b22] text-[#58a6ff] font-bold">
                 <option value="openai/gpt-4o-mini" className="bg-[#161b22] text-[#e6edf3]">
                   openai/gpt-4o-mini (Default Fast)
                 </option>
@@ -302,18 +335,92 @@ export default function SettingsPage() {
                 <option value="anthropic/claude-3.5-sonnet" className="bg-[#161b22] text-[#e6edf3]">
                   anthropic/claude-3.5-sonnet (Code Architecture)
                 </option>
-                <option value="google/gemini-2.5-flash" className="bg-[#161b22] text-[#e6edf3]">
-                  google/gemini-2.5-flash (Fast Multimodal)
-                </option>
                 <option value="deepseek/deepseek-chat" className="bg-[#161b22] text-[#e6edf3]">
                   deepseek/deepseek-chat (DeepSeek-V3)
-                </option>
-                <option value="auto" className="bg-[#161b22] text-[#e6edf3]">
-                  auto (OrcaRouter Dynamic Routing)
                 </option>
               </optgroup>
             </select>
           </div>
+        </div>
+
+        {/* Upstash Memory Layer Card */}
+        <div className="pt-4 border-t border-[#30363d] space-y-3.5">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xs font-bold uppercase text-[#8b949e] tracking-wider flex items-center gap-2 font-mono">
+              <Database className="w-4 h-4 text-[#3fb950]" />
+              <span>2. Upstash Serverless Memory & Vector Layer</span>
+            </h2>
+            <a
+              href="https://console.upstash.com"
+              target="_blank"
+              rel="noreferrer"
+              className="text-[10px] font-mono text-[#3fb950] hover:underline"
+            >
+              Open Upstash Console &rarr;
+            </a>
+          </div>
+
+          <p className="text-[11px] text-[#8b949e] leading-relaxed font-mono">
+            Powers distributed AST node locks in <code>/multiplayer</code>, persistent Beads task DAGs in <code>/psmas</code>, and semantic code search via Upstash Vector.
+          </p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 font-mono">
+            {/* Redis REST URL */}
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-semibold text-[#8b949e]">Upstash Redis REST URL</label>
+              <input
+                type="text"
+                placeholder="https://...upstash.io"
+                value={upstashRedisUrl}
+                onChange={(e) => setUpstashRedisUrl(e.target.value)}
+                className="w-full bg-[#0d1117] border border-[#30363d] focus:border-[#3fb950] rounded-lg p-2 text-xs text-[#e6edf3] placeholder-[#484f58] focus:outline-none transition-colors"
+              />
+            </div>
+
+            {/* Redis REST Token */}
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-semibold text-[#8b949e]">Upstash Redis REST Token</label>
+              <input
+                type="password"
+                placeholder="AX...=="
+                value={upstashRedisToken}
+                onChange={(e) => setUpstashRedisToken(e.target.value)}
+                className="w-full bg-[#0d1117] border border-[#30363d] focus:border-[#3fb950] rounded-lg p-2 text-xs text-[#e6edf3] placeholder-[#484f58] focus:outline-none transition-colors"
+              />
+            </div>
+
+            {/* Vector REST URL */}
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-semibold text-[#8b949e]">Upstash Vector REST URL</label>
+              <input
+                type="text"
+                placeholder="https://...vector.upstash.io"
+                value={upstashVectorUrl}
+                onChange={(e) => setUpstashVectorUrl(e.target.value)}
+                className="w-full bg-[#0d1117] border border-[#30363d] focus:border-[#3fb950] rounded-lg p-2 text-xs text-[#e6edf3] placeholder-[#484f58] focus:outline-none transition-colors"
+              />
+            </div>
+
+            {/* Vector REST Token */}
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-semibold text-[#8b949e]">Upstash Vector REST Token</label>
+              <input
+                type="password"
+                placeholder="AB...=="
+                value={upstashVectorToken}
+                onChange={(e) => setUpstashVectorToken(e.target.value)}
+                className="w-full bg-[#0d1117] border border-[#30363d] focus:border-[#3fb950] rounded-lg p-2 text-xs text-[#e6edf3] placeholder-[#484f58] focus:outline-none transition-colors"
+              />
+            </div>
+          </div>
+
+          {/* Upstash Memory Ping Output */}
+          {memoryPingStatus && (
+            <div className="p-2.5 rounded-lg bg-[#0d1117] border border-[#30363d] font-mono text-[11px] text-[#3fb950] flex items-center justify-between">
+              <span>{memoryPingStatus}</span>
+              <span className="text-[9px] text-[#8b949e]">Checked at {new Date().toLocaleTimeString()}</span>
+            </div>
+          )}
         </div>
 
         {/* Connection Test Status */}
@@ -351,15 +458,14 @@ export default function SettingsPage() {
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
-            {providerMode === 'byok' && (
-              <button
-                onClick={handleClearKeys}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#21262d] hover:bg-[#30363d] text-[#8b949e] hover:text-[#f85149] border border-[#30363d] font-medium transition-all text-xs min-h-[36px]"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>Reset Default</span>
-              </button>
-            )}
+            <button
+              onClick={handleTestUpstashMemory}
+              disabled={isTestingMemory}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#21262d] hover:bg-[#30363d] text-[#3fb950] border border-[#3fb950]/40 font-medium transition-all text-xs disabled:opacity-40 disabled:cursor-not-allowed min-h-[36px]"
+            >
+              {isTestingMemory ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Database className="w-3.5 h-3.5" />}
+              <span>Test Upstash Memory</span>
+            </button>
 
             <button
               onClick={handleTestConnection}
@@ -367,7 +473,7 @@ export default function SettingsPage() {
               className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#21262d] hover:bg-[#30363d] text-[#58a6ff] border border-[#58a6ff]/40 font-medium transition-all text-xs disabled:opacity-40 disabled:cursor-not-allowed min-h-[36px]"
             >
               <Wifi className="w-3.5 h-3.5" />
-              <span>Test Connection</span>
+              <span>Test AI Gateway</span>
             </button>
 
             <button
